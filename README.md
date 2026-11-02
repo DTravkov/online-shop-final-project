@@ -35,3 +35,16 @@ Stop the services:
 ```sh
 docker compose down
 ```
+
+## API tests
+
+Install development dependencies and run the tests from the project root:
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m pytest
+```
+
+Add future tests in `tests/test_<feature>.py`, following `tests/test_main.py`.
+Tests use FastAPI's test client without running application startup, so the
+example tests do not require Docker or database connections.
