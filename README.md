@@ -61,17 +61,6 @@ returns 409; delete dependent records first. Failed writes roll back. Orders and
 order items are independent CRUD records: stock, order totals, and payment state
 are supplied by the caller, with no checkout or automatic recalculation logic.
 
-## Tests
-
-```sh
-python -m pip install -r requirements-dev.txt
-python -m pytest
-```
-
-CRUD tests use an isolated in-memory SQLite database and the actual DI chain;
-marketplace tests enforce foreign keys and check persistence, validation,
-restricted deletes, and rollback. PostgreSQL and Redis are not needed for these tests.
-
 ## Run
 
 ### Development with automatic reload
