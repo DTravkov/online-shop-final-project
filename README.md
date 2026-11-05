@@ -53,8 +53,10 @@ The example user has an integer `id` and a `name` (1–100 characters):
 - `PUT /users/{user_id}` — replace the name
 - `DELETE /users/{user_id}` — delete, returning HTTP 204
 
-Tables are created on startup for this basic example. Schema changes to existing
-tables will need migrations later. The user example does not include authentication.
+SQLAlchemy models define the initial database schema. Missing tables are created
+on startup, including the timezone-aware order date column. Existing table
+definitions are not changed by startup. The user example does not include
+authentication.
 
 The document's `customers`, `sellers`, `products`, `orders`, and `order_items`
 tables have SQLAlchemy models in `backend/app/models` and create, update, and read
@@ -80,6 +82,12 @@ Foreign keys must reference existing records. Deleting a referenced parent
 returns 409; delete dependent records first. Failed writes roll back. Orders and
 order items are independent CRUD records: stock, order totals, and payment state
 are supplied by the caller, with no checkout or automatic recalculation logic.
+
+Order dates must include a timezone: for example,
+`"order_date": "2026-11-05T10:31:56.731Z"` or
+`"order_date": "2026-11-05T15:31:56.731+05:00"`. PostgreSQL stores the instant
+using `TIMESTAMP WITH TIME ZONE`; the original offset is not retained. Dates
+without a timezone return HTTP 422.
 
 ## Run
 

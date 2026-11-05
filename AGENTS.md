@@ -153,6 +153,11 @@ and sellers; it does not represent an authentication account.
 Use the existing `Decimal`/`Numeric` types for monetary fields and the seller
 rating. Preserve schema constraints and the allowed order/payment status values.
 
+`order_date` uses `DateTime(timezone=True)` in the model and `AwareDatetime`
+in the schemas. Create and update requests must include `Z` or an explicit UTC
+offset; timezone-less dates return 422. PostgreSQL preserves the instant rather
+than the original offset.
+
 Orders and order items are independent CRUD resources. Callers supply prices,
 totals, stock quantities, dates, and statuses. Item writes do not adjust stock
 or recalculate order totals. Authentication, checkout, and payment processing
@@ -167,8 +172,9 @@ are not implemented. Redis currently supports the health check only.
   variables and supplies the connection URLs to the API container.
 - `create_engine` converts `postgresql://` URLs to `postgresql+asyncpg://`.
 - Startup imports `app.models` and runs `Base.metadata.create_all`. This creates
-  missing tables; it does not migrate existing table definitions. No migration
-  tooling is currently configured.
+  missing tables directly from the model definitions, including `order_date` as
+  `TIMESTAMP WITH TIME ZONE`. Existing table definitions are not changed by
+  startup. No separate schema upgrade scripts are used at this stage.
 - `/health` checks both the database (`SELECT 1`) and Redis (`PING`), returning
   503 if either check fails.
 - Compose runs PostgreSQL 17 and Redis 7 with persistent volumes and publishes
