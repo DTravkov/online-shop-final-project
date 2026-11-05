@@ -1,21 +1,40 @@
-# Online Shop API
+# Online Shop
 
-Minimal FastAPI, PostgreSQL, and Redis project using Docker Compose.
+FastAPI backend and React + Vite frontend, with PostgreSQL and Redis, using
+Docker Compose.
 
 ## Application structure
 
 ```text
-app/
-  api/          # HTTP routes
-  service/      # Application operations and transaction boundaries
-  repository/   # Database queries
-  models/       # SQLAlchemy models
-  schemas/      # Pydantic request and response schemas
-  core/         # Configuration and database session
-  exceptions/   # Plain application exceptions
-  utils/        # Reserved for small shared helpers
-  main.py       # Application setup, lifespan, exception mapping, health check
+backend/
+  app/
+    api/          # HTTP routes
+    service/      # Application operations and transaction boundaries
+    repository/   # Database queries
+    models/       # SQLAlchemy models
+    schemas/      # Pydantic request and response schemas
+    core/         # Configuration and database session
+    exceptions/   # Plain application exceptions
+    utils/        # Reserved for small shared helpers
+    main.py       # Application setup, lifespan, exception mapping, health check
+  requirements.txt     # Backend runtime dependencies
+  requirements-dev.txt # Backend development dependencies
+  Dockerfile           # Python API image
+  .dockerignore        # Backend build context exclusions
+front/
+  src/          # React entry point, app component, and styles
+  index.html    # HTML entry point
+  vite.config.js # Dev server and API proxy
+  Dockerfile    # Node.js frontend image
+compose.yaml    # Shared stack configuration
+.env.example    # Shared Compose environment example
 ```
+
+`backend/` and `front/` are separate Docker build contexts. Backend Python
+commands run from `backend/`, where `app/` remains the application package;
+imports such as `from app.main import app` are unchanged. Run Compose commands
+from the repository root. Shared environment configuration and documentation
+also stay in the root.
 
 Dependencies flow `router -> service -> repository -> database` using
 FastAPI `Depends`. Each request gets an async SQLAlchemy session, closed after
@@ -38,8 +57,9 @@ Tables are created on startup for this basic example. Schema changes to existing
 tables will need migrations later. The user example does not include authentication.
 
 The document's `customers`, `sellers`, `products`, `orders`, and `order_items`
-tables have SQLAlchemy models in `app/models` and create, update, and read schemas
-in `app/schemas`. All models are registered by importing `app.models` at startup.
+tables have SQLAlchemy models in `backend/app/models` and create, update, and read
+schemas in `backend/app/schemas`. All models are registered by importing
+`app.models` at startup.
 Document fields are required; update schemas describe full replacements.
 
 Each marketplace resource has its own router, service, and repository:
@@ -63,27 +83,6 @@ are supplied by the caller, with no checkout or automatic recalculation logic.
 
 ## Run
 
-### Development with automatic reload
-
-Use the self-contained development Compose file:
-
-```sh
-docker compose -f compose.dev.yaml up --build
-```
-
-The app source is mounted into the API container. Saving a Python file under
-`app/` restarts Uvicorn automatically; changes are checked every 0.25 seconds.
-PostgreSQL and Redis are included in this file. Dependency or Dockerfile
-changes require rerunning the command with `--build`.
-
-Stop the development services with:
-
-```sh
-docker compose -f compose.dev.yaml down
-```
-
-### Standard run
-
 Install Docker with the Compose plugin, then copy the example environment file:
 
 ```sh
@@ -96,17 +95,30 @@ On PowerShell:
 Copy-Item .env.example .env
 ```
 
-Start the services:
+Start all services (frontend, API, PostgreSQL, and Redis):
 
 ```sh
-docker compose up --build -d
+docker compose up
 ```
 
+- Frontend: http://localhost:5173
 - API: http://localhost:8000
 - Swagger UI: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
-The health endpoint checks both PostgreSQL and Redis and returns HTTP 503 if either is unavailable. PostgreSQL and Redis data persist in Docker volumes. Only the API port is published to the host.
+Compose builds missing images on the first run. Use `docker compose up --build`
+after changing dependencies or a Dockerfile, and add `-d` to run in the background.
+`docker-compose up` also works where the standalone Compose command is installed.
+Set `FRONT_PORT` or `API_PORT` in `.env` to change the published ports.
+
+Both applications reload during development: Python changes under `backend/app/`
+restart Uvicorn, and changes under `front/src/` update through Vite. The frontend's
+`index.html` and `vite.config.js` are also mounted into its container. Polling is
+enabled for frontend file watching in Docker, including on Windows. Frontend
+dependencies stay inside the image; rebuild it after changing `package.json`
+or `package-lock.json`.
+
+The health endpoint checks both PostgreSQL and Redis and returns HTTP 503 if either is unavailable. PostgreSQL and Redis data persist in Docker volumes. The frontend and API ports are published to the host.
 
 The example credentials are for local development. Use a URL-safe password in `.env` because it is included in the database connection URL.
 
@@ -115,3 +127,30 @@ Stop the services:
 ```sh
 docker compose down
 ```
+
+## Frontend
+
+`front/` contains a minimal React + Vite JavaScript app with a startup screen.
+There are no marketplace pages or client-side routes yet. Its Docker image uses
+Node.js 24.
+
+For future API calls, use relative URLs such as `fetch('/api/products')`.
+Vite removes the `/api` prefix and forwards the request to `http://api:8000`
+inside Compose, so browser requests use the frontend's origin.
+
+To run the frontend outside Docker, use Node.js 20.19+ or 22.12+:
+
+```sh
+cd front
+npm ci
+npm run dev
+```
+
+On PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
+The local proxy defaults to `http://localhost:8000`; set `API_PROXY_TARGET`
+in the shell environment if the API runs elsewhere.
+
+`npm run build` generates static assets in `front/dist/`, and `npm run preview`
+serves that build locally. Vite also uses the proxy during local preview. The
+static assets do not include an API proxy; a production deployment will need
+its own API routing.
