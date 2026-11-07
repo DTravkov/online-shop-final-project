@@ -16,3 +16,4 @@ class Order(Base):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     order_status: Mapped[str] = mapped_column(String(20))
     payment_status: Mapped[str] = mapped_column(String(20))
+    delivery_address: Mapped[str | None] = mapped_column(String(255))
