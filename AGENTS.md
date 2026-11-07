@@ -3,9 +3,10 @@
 ## Purpose and scope
 
 This repository is the foundation for a marketplace similar to Wildberries.
-It provides a single FastAPI application in `backend/` with CRUD APIs,
-PostgreSQL persistence, a Redis health check, and a minimal React + Vite frontend
-in `front/`.
+It provides a single FastAPI application in `backend/` with role-based
+marketplace APIs (customers, sellers, administrators), admin-only table CRUD,
+PostgreSQL persistence, a Redis health check, and a minimal React + Vite
+frontend in `front/`.
 
 Follow the architecture and behavior described below when making requested
 changes. Keep proposed improvements separate from this file and ask the project
@@ -23,10 +24,11 @@ backend/
     models/        # SQLAlchemy table definitions and model registration
     schemas/       # Pydantic create, update, and read schemas
     core/
-      config.py    # Environment-based database and Redis URLs
+      config.py    # Environment-based database, Redis, JWT, and admin settings
       db.py        # Declarative Base, async engine factory, session dependency
+      security.py  # Password hashing (scrypt) and JWT encode/decode
     exceptions/    # Plain application exceptions
-    utils/         # Currently empty; reserved for small shared helpers
+    utils/         # Small shared helpers (email normalization)
   requirements.txt     # Backend runtime dependencies
   requirements-dev.txt # Backend development dependencies
   Dockerfile           # Python 3.12 API image
@@ -85,6 +87,15 @@ router -> service -> repository -> AsyncSession -> database
 Use the existing resource-specific classes. There are no generic base services,
 base repositories, separate domain layer, or microservices in this project.
 
+Marketplace features use feature services that take several repositories:
+`auth`, `catalog`, `customer_profile`, `cart`, `customer_order`,
+`seller_store`, `seller_order`, and `admin`. Their routers are `api/auth.py`
+(`/auth`), `api/catalog.py` (`/catalog`), `api/customer_cabinet.py`
+(`/customer`), `api/seller_cabinet.py` (`/seller`), and `api/admin.py`
+(`/admin`). Repositories created in one request share its session, so one
+repository's `transaction()` covers writes made through the others.
+`repository/analytics.py` holds read-only aggregate queries and has no model.
+
 ## Frontend
 
 - `front/` is an independent JavaScript React application built with Vite.
@@ -115,13 +126,25 @@ base repositories, separate domain layer, or microservices in this project.
   they do not commit independently. Create/update also refresh the record.
 - Marketplace repository transaction contexts translate `IntegrityError` into
   `RecordConflict`. The example user repository exposes `db.begin()` directly.
-- `backend/app/main.py` maps `RecordNotFound` and `UserNotFound` to HTTP 404 and
-  `RecordConflict` to HTTP 409, using a JSON `detail` field. Request validation
-  uses FastAPI's HTTP 422 responses.
+- `backend/app/main.py` maps `RecordNotFound` and `UserNotFound` to HTTP 404,
+  `RecordConflict` to HTTP 409, `AuthenticationFailed` to HTTP 401 (with
+  `WWW-Authenticate: Bearer`), `PermissionDenied` to HTTP 403, and
+  `BusinessRuleViolation` to HTTP 400, using a JSON `detail` field. Request
+  validation uses FastAPI's HTTP 422 responses.
+- `AsyncSession.begin()` fails if the session already has a transaction, and
+  any read starts one. A write method must therefore enter `transaction()`
+  before its first query. For the same reason, the authentication dependencies
+  in `service/auth.py` verify the JWT without querying the database.
+- Rows that concurrent requests may change (stock, order status) are locked
+  with `SELECT ... FOR UPDATE` inside the transaction; checkout locks products
+  in primary-key order.
 
 Preserve rollback behavior, including when an exception occurs after a flush.
 
 ## Resources and existing API behavior
+
+Table CRUD routes are registered in `main.py` with an admin-only dependency;
+the example users stay public.
 
 | Resource | Route prefix | Primary key |
 | --- | --- | --- |
@@ -144,11 +167,18 @@ Relationships are database foreign keys:
 sellers   <- products
 customers <- orders
 orders    <- order_items -> products
+customers <- accounts -> sellers      (nullable, unique, ON DELETE CASCADE)
+customers <- cart_items -> products   (ON DELETE CASCADE)
 ```
 
 Invalid references and deletion of referenced parents return 409. Dependent
-records must be deleted first. The example user is independent of customers
-and sellers; it does not represent an authentication account.
+records must be deleted first, except accounts and cart items, which cascade.
+The example user is independent of customers and sellers; it does not represent
+an authentication account. `accounts` holds the login email (unique,
+lowercase), password hash, role (`customer`, `seller`, `admin`), and the linked
+profile. `products.is_active` marks withdrawn products and
+`orders.delivery_address` stores the checkout address (nullable for CRUD
+orders).
 
 Use the existing `Decimal`/`Numeric` types for monetary fields and the seller
 rating. Preserve schema constraints and the allowed order/payment status values.
@@ -158,23 +188,33 @@ in the schemas. Create and update requests must include `Z` or an explicit UTC
 offset; timezone-less dates return 422. PostgreSQL preserves the instant rather
 than the original offset.
 
-Orders and order items are independent CRUD resources. Callers supply prices,
-totals, stock quantities, dates, and statuses. Item writes do not adjust stock
-or recalculate order totals. Authentication, checkout, and payment processing
-are not implemented. Redis currently supports the health check only.
+Through the table CRUD routes, orders and order items stay independent:
+callers supply prices, totals, stock, dates, and statuses, and nothing is
+recalculated. The marketplace routes apply the business rules documented in
+`README.md`: checkout turns the whole cart into one order (snapshotting prices,
+reserving stock, emptying the cart); sellers move orders containing their
+products `new` → `shipped`/`delivered` and `shipped` → `delivered`; customers
+cancel only `new` orders, which returns stock and refunds paid orders;
+administrators change payment `pending` → `paid` → `refunded`; deleting a
+seller's product withdraws it. The cart lives in PostgreSQL. Redis currently
+supports the health check only.
 
 ## Runtime and configuration
 
-- Runtime dependencies are FastAPI, Uvicorn, async SQLAlchemy, asyncpg, and
-  redis-py.
-- `backend/app/core/config.py` reads `DATABASE_URL` and `REDIS_URL` from the process
-  environment. The application does not load `.env` itself. Compose reads its
+- Runtime dependencies are FastAPI, Uvicorn, async SQLAlchemy, asyncpg,
+  redis-py, and PyJWT.
+- `backend/app/core/config.py` reads `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
+  `ACCESS_TOKEN_EXPIRE_MINUTES`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` from the
+  process environment. When both admin variables are set, startup creates that
+  administrator account if no account uses the email. The application does not load `.env` itself. Compose reads its
   variables and supplies the connection URLs to the API container.
 - `create_engine` converts `postgresql://` URLs to `postgresql+asyncpg://`.
 - Startup imports `app.models` and runs `Base.metadata.create_all`. This creates
   missing tables directly from the model definitions, including `order_date` as
   `TIMESTAMP WITH TIME ZONE`. Existing table definitions are not changed by
-  startup. No separate schema upgrade scripts are used at this stage.
+  startup. No separate schema upgrade scripts are used at this stage; when a
+  column is added to an existing table, document the `ALTER TABLE` in
+  `README.md` (see "Upgrading an existing database").
 - `/health` checks both the database (`SELECT 1`) and Redis (`PING`), returning
   503 if either check fails.
 - Compose runs PostgreSQL 17 and Redis 7 with persistent volumes and publishes
@@ -206,6 +246,11 @@ For the standard stack, copy `.env.example` to `.env` if needed, as described
 in `README.md`. The frontend is at `http://localhost:5173`; the API and Swagger
 UI are at `http://localhost:8000` and `/docs`. Add `--build` after dependency or
 Dockerfile changes, and `-d` for background operation.
+
+Backend tests run from `backend/` with `python -m pytest`. API tests need
+`TEST_DATABASE_URL` pointing to a disposable PostgreSQL database (wiped before
+each test); without it they are skipped. `tests/conftest.py` provides helpers
+for registering customers and sellers and signing in as the administrator.
 
 For frontend-only development, run `npm ci` then `npm run dev` from `front/`
 with Node.js 20.19+ or 22.12+. Use `npm.cmd` on PowerShell if needed. The local

@@ -20,6 +20,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-shop}:${POSTGRES_PASSWORD:-shop}@postgres:5432/${POSTGRES_DB:-shop}
       REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@shop.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
     depends_on:
       postgres:
         condition: service_healthy
