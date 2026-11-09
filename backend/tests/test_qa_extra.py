@@ -6,11 +6,10 @@
 Фикстура `api` и хелперы берутся из conftest.py (БД чистится перед каждым тестом).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
-
 from conftest import (
     add_product,
     login_admin,
@@ -62,12 +61,12 @@ def test_tc02_tampered_and_expired_tokens_are_rejected(api):
     assert me(buyer.token).status_code == 200
 
     # Токен, подписанный чужим секретом
-    forged = jwt.encode({**claims, "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
+    forged = jwt.encode({**claims, "exp": datetime.now(UTC) + timedelta(hours=1)},
                         "wrong-secret-wrong-secret-1234567890", algorithm=JWT_ALGORITHM)
     assert me(forged).status_code == 401
 
     # Правильная подпись, но срок действия истёк
-    expired = jwt.encode({**claims, "exp": datetime.now(timezone.utc) - timedelta(minutes=1)},
+    expired = jwt.encode({**claims, "exp": datetime.now(UTC) - timedelta(minutes=1)},
                          JWT_SECRET, algorithm=JWT_ALGORITHM)
     assert me(expired).status_code == 401
 
@@ -76,7 +75,7 @@ def test_tc02_tampered_and_expired_tokens_are_rejected(api):
     assert me(no_exp).status_code == 401
 
     # Токен с алгоритмом none (классическая атака)
-    none_alg = jwt.encode({**claims, "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
+    none_alg = jwt.encode({**claims, "exp": datetime.now(UTC) + timedelta(hours=1)},
                           key=None, algorithm="none")
     assert me(none_alg).status_code == 401
 

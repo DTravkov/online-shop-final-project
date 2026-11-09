@@ -9,7 +9,9 @@ def test_seller_manages_own_products(api):
     assert product["seller_id"] == seller.seller_id
     assert product["is_active"] is True
 
-    updated = seller.patch(f"/seller/products/{product['product_id']}", json={"price": "430000.50", "stock_quantity": 7})
+    updated = seller.patch(
+        f"/seller/products/{product['product_id']}", json={"price": "430000.50", "stock_quantity": 7}
+    )
     assert updated.status_code == 200
     assert updated.json()["price"] == "430000.50"
     assert updated.json()["stock_quantity"] == 7

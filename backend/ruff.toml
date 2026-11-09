@@ -1,0 +1,14 @@
+# Ruff configuration for the backend (run from backend/).
+target-version = "py312"
+line-length = 120
+
+[lint]
+# pycodestyle, Pyflakes, isort, pyupgrade, flake8-bugbear
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[lint.flake8-bugbear]
+# FastAPI dependency declarations such as `Depends(...)` are evaluated on purpose.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body", "fastapi.Path"]
+
+[lint.isort]
+known-first-party = ["app"]
