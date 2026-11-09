@@ -203,6 +203,29 @@ API tests need an empty PostgreSQL database that they can wipe; without
 stack running, create one with
 `docker compose exec postgres createdb -U shop shop_test`.
 
+## Linting
+
+The backend is linted with [Ruff](https://docs.astral.sh/ruff/) (configuration in
+`backend/ruff.toml`). From `backend/`:
+
+```sh
+ruff check .
+ruff check . --fix   # apply safe automatic fixes
+```
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main` and on
+every pull request:
+
+1. **Ruff lint** - `ruff check` on the backend.
+2. **Backend tests** - `pytest` against PostgreSQL 17 and Redis 7 service containers.
+3. **Frontend build** - `npm ci` and `npm run build` with Node.js 24.
+4. **Docker images build** - builds the API and frontend images after tests pass.
+
+Dependabot (`.github/dependabot.yml`) opens weekly update pull requests for pip,
+npm, Docker base images, and GitHub Actions.
+
 ## Run
 
 Install Docker with the Compose plugin, then copy the example environment file:

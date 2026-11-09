@@ -131,17 +131,18 @@ def test_seller_sees_and_processes_orders_with_own_items(api):
 
     assert outsider.get("/seller/orders").json() == []
     assert outsider.get(f"/seller/orders/{order['order_id']}").status_code == 404
-    assert outsider.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "shipped"}).status_code == 404
+    status_url = f"/seller/orders/{order['order_id']}/status"
+    assert outsider.patch(status_url, json={"order_status": "shipped"}).status_code == 404
 
     shipped = alpha.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "shipped"})
     assert shipped.status_code == 200 and shipped.json()["order_status"] == "shipped"
     assert buyer.get(f"/customer/orders/{order['order_id']}").json()["order_status"] == "shipped"
     assert buyer.post(f"/customer/orders/{order['order_id']}/cancel").status_code == 400
 
-    assert beta.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "delivered"}).status_code == 200
+    assert beta.patch(status_url, json={"order_status": "delivered"}).status_code == 200
     back = alpha.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "shipped"})
     assert back.status_code == 400
-    assert alpha.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "cancelled"}).status_code == 422
+    assert alpha.patch(status_url, json={"order_status": "cancelled"}).status_code == 422
     assert [o["order_id"] for o in alpha.get("/seller/orders", params={"order_status": "delivered"}).json()] == [
         order["order_id"]
     ]

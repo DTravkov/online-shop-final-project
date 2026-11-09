@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -53,7 +53,7 @@ DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(16))
 
 
 def create_access_token(claims: dict[str, Any]) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {**claims, "iat": now, "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 

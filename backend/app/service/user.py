@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.exceptions import UserNotFound
 from app.repository.user import UserRepository, get_user_repository
+from app.schemas.user import UserCreate, UserRead, UserUpdate
 
 
 class UserService:

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /front
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      vite:
+        patterns: ["vite", "@vitejs/*"]
+      react:
+        patterns: ["react", "react-dom"]
+
+  - package-ecosystem: docker
+    directories: [/backend, /front]
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -72,7 +72,7 @@ async def clear_cart(account: CustomerAccount, service: CartServiceDep):
 # --- Orders ----------------------------------------------------------------------
 
 @router.post("/orders", response_model=OrderDetail, status_code=status.HTTP_201_CREATED)
-async def checkout(account: CustomerAccount, service: OrderServiceDep, data: CheckoutRequest = CheckoutRequest()):
+async def checkout(account: CustomerAccount, service: OrderServiceDep, data: CheckoutRequest = CheckoutRequest()):  # noqa: B008
     """Place an order from the whole cart. The body is optional."""
     return await service.checkout(account.customer_id, data)
 

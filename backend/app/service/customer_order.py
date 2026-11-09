@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -70,7 +70,7 @@ class CustomerOrderService:
 
             order = await self.orders.create({
                 "customer_id": customer_id,
-                "order_date": datetime.now(timezone.utc),
+                "order_date": datetime.now(UTC),
                 "total_amount": total,
                 "order_status": "new",
                 "payment_status": data.payment_status,

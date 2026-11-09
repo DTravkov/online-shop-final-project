@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -21,8 +21,8 @@ def test_order_date_preserves_the_instant(schema, order_date):
         payment_status="pending",
     )
 
-    assert order.order_date.astimezone(timezone.utc) == datetime(
-        2026, 11, 5, 10, 31, 56, 731000, tzinfo=timezone.utc,
+    assert order.order_date.astimezone(UTC) == datetime(
+        2026, 11, 5, 10, 31, 56, 731000, tzinfo=UTC,
     )
 
 

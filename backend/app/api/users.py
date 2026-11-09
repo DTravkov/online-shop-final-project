@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.service.user import UserService, get_user_service
