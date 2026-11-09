@@ -31,18 +31,35 @@ def test_tc01_password_length_boundary(api):
     }
 
     # 7 символов — слишком коротко
-    too_short = api.post(REGISTER_URL, json={**base, "email": "a@test.local", "password": "1234567"})
+    too_short = api.post(REGISTER_URL, json={**base, "email": "a@test.local", "password": "abc-123"})
     assert too_short.status_code == 422
 
     # 8 символов — минимально допустимо
-    ok = api.post(REGISTER_URL, json={**base, "email": "b@test.local", "password": "12345678"})
+    ok = api.post(REGISTER_URL, json={**base, "email": "b@test.local", "password": "abc-1234"})
     assert ok.status_code == 201
 
     # 128 символов — максимально допустимо, 129 — уже нет
-    longest = api.post(REGISTER_URL, json={**base, "email": "c@test.local", "password": "x" * 128})
+    longest = api.post(REGISTER_URL, json={**base, "email": "c@test.local", "password": "x-" * 64})
     assert longest.status_code == 201
-    too_long = api.post(REGISTER_URL, json={**base, "email": "d@test.local", "password": "x" * 129})
+    too_long = api.post(REGISTER_URL, json={**base, "email": "d@test.local", "password": "x-" * 64 + "x"})
     assert too_long.status_code == 422
+
+
+def test_password_requires_letter_and_special_character(api):
+    base = {
+        "full_name": "Test User",
+        "phone": "+77010000000",
+        "delivery_address": "Almaty, Abay 1",
+    }
+    no_letter = api.post(REGISTER_URL, json={**base, "email": "a@test.local", "password": "1234-5678"})
+    assert no_letter.status_code == 422
+    no_special = api.post(REGISTER_URL, json={**base, "email": "b@test.local", "password": "abcd1234"})
+    assert no_special.status_code == 422
+    seller = api.post(
+        "/auth/register/seller",
+        json={"email": "c@test.local", "password": "abcd1234", "store_name": "S", "phone": "1"},
+    )
+    assert seller.status_code == 422
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@shop.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
     depends_on:
       postgres:
         condition: service_healthy

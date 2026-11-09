@@ -17,7 +17,7 @@ from app.api.product import router as products_router
 from app.api.seller import router as sellers_router
 from app.api.seller_cabinet import router as seller_cabinet_router
 from app.api.users import router as users_router
-from app.core.config import ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, REDIS_URL
+from app.core.config import ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, REDIS_URL, SEED_DEMO_DATA
 from app.core.db import Base, create_engine
 from app.exceptions import (
     AuthenticationFailed,
@@ -28,6 +28,7 @@ from app.exceptions import (
     UserNotFound,
 )
 from app.service.auth import ensure_admin_account, require_admin
+from app.service.seed import ensure_demo_data
 
 
 @asynccontextmanager
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI):
             await connection.run_sync(Base.metadata.create_all)
         if ADMIN_EMAIL and ADMIN_PASSWORD:
             await ensure_admin_account(engine, ADMIN_EMAIL, ADMIN_PASSWORD)
+        if SEED_DEMO_DATA:
+            await ensure_demo_data(engine)
         async with Redis.from_url(REDIS_URL) as redis:
             app.state.db = engine
             app.state.redis = redis

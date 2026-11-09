@@ -80,6 +80,21 @@ Administrators cannot self-register: when `ADMIN_EMAIL` and `ADMIN_PASSWORD`
 are set, startup creates that administrator account if it is missing. Compose
 defaults them to `admin@shop.local` / `admin12345` for local development.
 
+Registration passwords must be 8-128 characters long and contain at least one
+letter and one special (non-alphanumeric) character.
+
+When `SEED_DEMO_DATA` is true (the Compose default), startup also creates demo
+records if their emails are not registered yet. They are written directly to the
+database, so their short development passwords bypass the registration rules:
+
+| Role | Name | Email | Password |
+| --- | --- | --- | --- |
+| Customer | test | `test@gmail.com` | `test` |
+| Seller | test1 | `test1@gmail.com` | `test1...` |
+
+The demo seller offers two products: "Apple iPhone 15 128GB Black" and
+"Samsung Galaxy Buds2 Pro Graphite".
+
 Missing or invalid tokens return 401; a valid token with the wrong role returns
 403.
 

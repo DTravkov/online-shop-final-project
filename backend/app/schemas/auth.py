@@ -16,6 +16,15 @@ class _NewCredentials(BaseModel):
     def _normalize_email(cls, value: object) -> object:
         return normalize_email(value)
 
+    @field_validator("password")
+    @classmethod
+    def _check_password_strength(cls, value: str) -> str:
+        if not any(char.isalpha() for char in value):
+            raise ValueError("Password must contain at least one letter.")
+        if all(char.isalnum() for char in value):
+            raise ValueError("Password must contain at least one special character.")
+        return value
+
 
 class CustomerRegister(_NewCredentials):
     full_name: str = Field(min_length=1, max_length=100)

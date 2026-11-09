@@ -11,3 +11,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 # When both are set, startup creates this administrator account if it is missing.
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+# When true, startup creates demo customer, seller, and product records if they are missing.
+SEED_DEMO_DATA = os.getenv("SEED_DEMO_DATA", "").lower() in {"1", "true", "yes"}
