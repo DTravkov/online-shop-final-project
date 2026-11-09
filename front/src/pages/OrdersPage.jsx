@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiGet, apiPost, apiPatch, formatDate, formatPrice, getErrorMessage } from '../api.js'
+import { apiGet, apiPost, apiPut, apiPatch, formatDate, formatPrice, getErrorMessage } from '../api.js'
 import { getProductVisual } from '../helpers.js'
 import { Button, Icon, PageLoading, PageTitle, Status } from '../components/Common.jsx'
 
@@ -55,6 +55,21 @@ export default function OrdersPage({ token, role, showToast }) {
     setBusyOrder(null)
   }
 
+  async function rateSeller(orderId, sellerId, rating) {
+    setBusyOrder(orderId)
+    setError('')
+
+    try {
+      await apiPut('/customer/orders/' + orderId + '/seller-ratings/' + sellerId, { rating }, token)
+      await loadOrders()
+      showToast('Оценка сохранена')
+    } catch (requestError) {
+      setError(getErrorMessage(requestError))
+    }
+
+    setBusyOrder(null)
+  }
+
   // Продавец меняет статус заказа.
   async function sellerAction(orderId, nextStatus) {
     setBusyOrder(orderId)
@@ -102,6 +117,13 @@ export default function OrdersPage({ token, role, showToast }) {
       ) : (
         <div className="orders-list">
           {orders.map((order) => {
+            const sellersInOrder = [...new Map(order.items.map((item) => [item.seller_id, {
+              sellerId: item.seller_id,
+              storeName: item.store_name,
+            }])).values()]
+            const ratingsBySeller = Object.fromEntries(
+              (order.seller_ratings || []).map((rating) => [rating.seller_id, rating.rating]),
+            )
             let customerName = 'Покупатель'
             if (order.customer_name) {
               customerName = order.customer_name
@@ -163,6 +185,39 @@ export default function OrdersPage({ token, role, showToast }) {
                   )
                 })}
               </div>
+
+              {role === 'customer' && order.order_status === 'delivered' ? (
+                <div className="order-rating-list">
+                  {sellersInOrder.map((seller) => {
+                    const currentRating = ratingsBySeller[seller.sellerId] || 0
+
+                    return (
+                      <div className="order-rating" key={seller.sellerId}>
+                        <div>
+                          <strong>{seller.storeName}</strong>
+                          <span>{currentRating ? `Ваша оценка: ${currentRating} из 5` : 'Оцените магазин'}</span>
+                        </div>
+                        <div className="rating-stars" role="group" aria-label={`Оценка магазина ${seller.storeName}`}>
+                          {[1, 2, 3, 4, 5].map((rating) => (
+                            <button
+                              type="button"
+                              key={rating}
+                              className={rating <= currentRating ? 'selected' : ''}
+                              aria-pressed={rating === currentRating}
+                              aria-label={`${rating} из 5`}
+                              title={`${rating} из 5`}
+                              disabled={busyOrder === order.order_id}
+                              onClick={() => rateSeller(order.order_id, seller.sellerId, rating)}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
 
               <div className="order-bottom">
                 <div>

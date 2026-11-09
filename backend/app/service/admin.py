@@ -6,6 +6,7 @@ from app.exceptions import BusinessRuleViolation, RecordNotFound
 from app.repository.analytics import AnalyticsRepository, get_analytics_repository
 from app.repository.order import OrderRepository, get_order_repository
 from app.repository.order_item import OrderItemRepository, get_order_item_repository
+from app.repository.seller_rating import SellerRatingRepository, get_seller_rating_repository
 from app.schemas.analytics import OrderStats, PlatformSummary, ProductStats, TopProduct, UserStats
 from app.schemas.order import OrderDetail, OrderRead, PaymentStatusUpdate
 from app.service.customer_order import CENT, load_order_details
@@ -26,10 +27,12 @@ class AdminService:
         analytics: AnalyticsRepository,
         orders: OrderRepository,
         order_items: OrderItemRepository,
+        seller_ratings: SellerRatingRepository,
     ):
         self.analytics = analytics
         self.orders = orders
         self.order_items = order_items
+        self.seller_ratings = seller_ratings
 
     async def top_products(self, limit: int) -> list[TopProduct]:
         return [TopProduct(**row) for row in await self.analytics.top_products(limit)]
@@ -69,7 +72,7 @@ class AdminService:
         order = await self.orders.get(order_id)
         if order is None:
             raise RecordNotFound("Order", order_id)
-        return (await load_order_details(self.order_items, [order]))[0]
+        return (await load_order_details(self.order_items, self.seller_ratings, [order]))[0]
 
     async def update_payment_status(self, order_id: int, data: PaymentStatusUpdate) -> OrderRead:
         async with self.orders.transaction():
@@ -91,5 +94,6 @@ def get_admin_service(
     analytics: Annotated[AnalyticsRepository, Depends(get_analytics_repository)],
     orders: Annotated[OrderRepository, Depends(get_order_repository)],
     order_items: Annotated[OrderItemRepository, Depends(get_order_item_repository)],
+    seller_ratings: Annotated[SellerRatingRepository, Depends(get_seller_rating_repository)],
 ) -> AdminService:
-    return AdminService(analytics, orders, order_items)
+    return AdminService(analytics, orders, order_items, seller_ratings)

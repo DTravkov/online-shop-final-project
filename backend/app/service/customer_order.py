@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
 
 from fastapi import Depends
@@ -12,20 +12,42 @@ from app.repository.customer import CustomerRepository, get_customer_repository
 from app.repository.order import OrderRepository, get_order_repository
 from app.repository.order_item import OrderItemRepository, get_order_item_repository
 from app.repository.product import ProductRepository, get_product_repository
-from app.schemas.order import CheckoutRequest, OrderDetail, OrderItemDetail, OrderRead
+from app.repository.seller import SellerRepository, get_seller_repository
+from app.repository.seller_rating import SellerRatingRepository, get_seller_rating_repository
+from app.schemas.order import (
+    CheckoutRequest,
+    OrderDetail,
+    OrderItemDetail,
+    OrderRead,
+    OrderSellerRating,
+    SellerRatingCreate,
+)
 from app.service.cart import check_stock
 
 MAX_ORDER_TOTAL = Decimal("99999999.99")  # orders.total_amount is NUMERIC(10, 2)
 CENT = Decimal("0.01")
 
 
-async def load_order_details(order_items: OrderItemRepository, orders: list[Order]) -> list[OrderDetail]:
+async def load_order_details(
+    order_items: OrderItemRepository,
+    seller_ratings: SellerRatingRepository,
+    orders: list[Order],
+) -> list[OrderDetail]:
     """Attach item, product, and seller data to orders using one query."""
     items_by_order: dict[int, list[OrderItemDetail]] = defaultdict(list)
     for item, product, seller in await order_items.list_details([order.order_id for order in orders]):
         items_by_order[item.order_id].append(OrderItemDetail.from_row(item, product, seller))
+    ratings_by_order: dict[int, list[OrderSellerRating]] = defaultdict(list)
+    for rating in await seller_ratings.list_for_orders([order.order_id for order in orders]):
+        ratings_by_order[rating.order_id].append(
+            OrderSellerRating(seller_id=rating.seller_id, rating=rating.rating)
+        )
     return [
-        OrderDetail(**OrderRead.model_validate(order).model_dump(), items=items_by_order[order.order_id])
+        OrderDetail(
+            **OrderRead.model_validate(order).model_dump(),
+            items=items_by_order[order.order_id],
+            seller_ratings=ratings_by_order[order.order_id],
+        )
         for order in orders
     ]
 
@@ -38,12 +60,16 @@ class CustomerOrderService:
         cart: CartItemRepository,
         products: ProductRepository,
         customers: CustomerRepository,
+        sellers: SellerRepository,
+        seller_ratings: SellerRatingRepository,
     ):
         self.orders = orders
         self.order_items = order_items
         self.cart = cart
         self.products = products
         self.customers = customers
+        self.sellers = sellers
+        self.seller_ratings = seller_ratings
 
     async def checkout(self, customer_id: int, data: CheckoutRequest) -> OrderDetail:
         """Turn the cart into one order: snapshot prices, reserve stock, empty the cart."""
@@ -86,7 +112,7 @@ class CustomerOrderService:
                 })
                 await self.products.update(product, {"stock_quantity": product.stock_quantity - item.quantity})
             await self.cart.clear(customer_id)
-            return (await load_order_details(self.order_items, [order]))[0]
+            return (await load_order_details(self.order_items, self.seller_ratings, [order]))[0]
 
     async def list_orders(
         self, customer_id: int, order_status: str | None, offset: int, limit: int
@@ -94,7 +120,7 @@ class CustomerOrderService:
         orders = await self.orders.list_filtered(
             offset, limit, customer_id=customer_id, order_status=order_status
         )
-        return await load_order_details(self.order_items, orders)
+        return await load_order_details(self.order_items, self.seller_ratings, orders)
 
     async def _get_own_order(self, customer_id: int, order_id: int, for_update: bool = False) -> Order:
         if for_update:
@@ -107,7 +133,37 @@ class CustomerOrderService:
 
     async def get_order(self, customer_id: int, order_id: int) -> OrderDetail:
         order = await self._get_own_order(customer_id, order_id)
-        return (await load_order_details(self.order_items, [order]))[0]
+        return (await load_order_details(self.order_items, self.seller_ratings, [order]))[0]
+
+    async def rate_seller(
+        self, customer_id: int, order_id: int, seller_id: int, data: SellerRatingCreate
+    ) -> OrderSellerRating:
+        async with self.seller_ratings.transaction():
+            order = await self.orders.get_for_update(order_id)
+            if order is None or order.customer_id != customer_id:
+                raise RecordNotFound("Order", order_id)
+            if order.order_status != "delivered":
+                raise BusinessRuleViolation("A seller can only be rated after the order is delivered.")
+            if not await self.orders.contains_seller_items(order_id, seller_id):
+                raise RecordNotFound("Seller in order", seller_id)
+
+            seller = await self.sellers.get_for_update(seller_id)
+            if seller is None:
+                raise RecordNotFound("Seller", seller_id)
+
+            rating = await self.seller_ratings.get_for_order_seller(order_id, seller_id)
+            if rating is None:
+                await self.seller_ratings.create({
+                    "order_id": order_id,
+                    "seller_id": seller_id,
+                    "rating": data.rating,
+                })
+            else:
+                await self.seller_ratings.update(rating, {"rating": data.rating})
+
+            average = await self.seller_ratings.average_for_seller(seller_id)
+            seller.rating = Decimal(str(average)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            return OrderSellerRating(seller_id=seller_id, rating=data.rating)
 
     async def pay(self, customer_id: int, order_id: int) -> OrderDetail:
         """Payment simulation: a pending order becomes paid."""
@@ -118,7 +174,7 @@ class CustomerOrderService:
             if order.payment_status != "pending":
                 raise BusinessRuleViolation(f"Order payment is already {order.payment_status}.")
             order = await self.orders.update(order, {"payment_status": "paid"})
-            return (await load_order_details(self.order_items, [order]))[0]
+            return (await load_order_details(self.order_items, self.seller_ratings, [order]))[0]
 
     async def cancel(self, customer_id: int, order_id: int) -> OrderDetail:
         """Cancel a new order, return its stock, and refund it if it was paid."""
@@ -136,7 +192,7 @@ class CustomerOrderService:
             if order.payment_status == "paid":
                 values["payment_status"] = "refunded"
             order = await self.orders.update(order, values)
-            return (await load_order_details(self.order_items, [order]))[0]
+            return (await load_order_details(self.order_items, self.seller_ratings, [order]))[0]
 
 
 def get_customer_order_service(
@@ -145,5 +201,7 @@ def get_customer_order_service(
     cart: Annotated[CartItemRepository, Depends(get_cart_item_repository)],
     products: Annotated[ProductRepository, Depends(get_product_repository)],
     customers: Annotated[CustomerRepository, Depends(get_customer_repository)],
+    sellers: Annotated[SellerRepository, Depends(get_seller_repository)],
+    seller_ratings: Annotated[SellerRatingRepository, Depends(get_seller_rating_repository)],
 ) -> CustomerOrderService:
-    return CustomerOrderService(orders, order_items, cart, products, customers)
+    return CustomerOrderService(orders, order_items, cart, products, customers, sellers, seller_ratings)

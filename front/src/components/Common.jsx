@@ -79,7 +79,11 @@ export function Field(props) {
         maxLength={props.maxLength}
         min={props.min}
         step={props.step}
+        autoComplete={props.autoComplete}
+        aria-invalid={props.error ? 'true' : undefined}
+        aria-describedby={props.error ? `${props.name}-error` : undefined}
       />
+      {props.error ? <small id={`${props.name}-error`} className="field-error">{props.error}</small> : null}
     </label>
   )
 }

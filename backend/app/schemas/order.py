@@ -58,10 +58,6 @@ class OrderItemDetail(BaseModel):
         )
 
 
-class OrderDetail(OrderRead):
-    items: list[OrderItemDetail]
-
-
 class SellerOrderRead(BaseModel):
     order_id: int
     order_date: datetime
@@ -80,3 +76,17 @@ class OrderStatusUpdate(BaseModel):
 
 class PaymentStatusUpdate(BaseModel):
     payment_status: PaymentStatus
+
+
+class SellerRatingCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+
+
+class OrderSellerRating(BaseModel):
+    seller_id: int
+    rating: int
+
+
+class OrderDetail(OrderRead):
+    items: list[OrderItemDetail]
+    seller_ratings: list[OrderSellerRating] = Field(default_factory=list)

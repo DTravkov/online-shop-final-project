@@ -156,6 +156,40 @@ def test_seller_cannot_process_cancelled_order(api):
     assert response.status_code == 400
 
 
+def test_customer_can_rate_sellers_after_delivery(api):
+    alpha, beta, buyer, phone, cable = _two_seller_cart(api)
+    outsider = register_customer(api, email="outsider@test.local")
+    order = buyer.post("/customer/orders", json={}).json()
+    alpha_rating_url = f"/customer/orders/{order['order_id']}/seller-ratings/{alpha.seller_id}"
+    beta_rating_url = f"/customer/orders/{order['order_id']}/seller-ratings/{beta.seller_id}"
+
+    assert buyer.put(alpha_rating_url, json={"rating": 5}).status_code == 400
+    assert outsider.put(alpha_rating_url, json={"rating": 5}).status_code == 404
+
+    delivered = beta.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "delivered"})
+    assert delivered.status_code == 200
+    assert buyer.put(
+        f"/customer/orders/{order['order_id']}/seller-ratings/999999", json={"rating": 5}
+    ).status_code == 404
+
+    rated = buyer.put(alpha_rating_url, json={"rating": 5})
+    assert rated.status_code == 200
+    assert rated.json() == {"seller_id": alpha.seller_id, "rating": 5}
+    assert buyer.put(alpha_rating_url, json={"rating": 3}).json()["rating"] == 3
+    assert buyer.put(beta_rating_url, json={"rating": 4}).status_code == 200
+    assert buyer.put(alpha_rating_url, json={"rating": 0}).status_code == 422
+
+    alpha_profile = alpha.get("/seller/profile").json()
+    beta_profile = beta.get("/seller/profile").json()
+    assert alpha_profile["rating"] == "3.0"
+    assert beta_profile["rating"] == "4.0"
+    saved = buyer.get(f"/customer/orders/{order['order_id']}").json()["seller_ratings"]
+    assert saved == [
+        {"seller_id": alpha.seller_id, "rating": 3},
+        {"seller_id": beta.seller_id, "rating": 4},
+    ]
+
+
 def test_admin_payment_status_control(api):
     alpha, beta, buyer, phone, cable = _two_seller_cart(api)
     admin = login_admin(api)

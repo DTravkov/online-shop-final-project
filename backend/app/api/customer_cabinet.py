@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.schemas.cart import CartItemAdd, CartItemQuantity, CartRead
 from app.schemas.customer import CustomerProfileUpdate, CustomerRead, DeliveryAddress
-from app.schemas.order import CheckoutRequest, OrderDetail, OrderStatus
+from app.schemas.order import CheckoutRequest, OrderDetail, OrderSellerRating, OrderStatus, SellerRatingCreate
 from app.service.auth import CustomerAccount
 from app.service.cart import CartService, get_cart_service
 from app.service.customer_order import CustomerOrderService, get_customer_order_service
@@ -92,6 +92,17 @@ async def list_orders(
 @router.get("/orders/{order_id}", response_model=OrderDetail)
 async def get_order(order_id: int, account: CustomerAccount, service: OrderServiceDep):
     return await service.get_order(account.customer_id, order_id)
+
+
+@router.put("/orders/{order_id}/seller-ratings/{seller_id}", response_model=OrderSellerRating)
+async def rate_seller(
+    order_id: int,
+    seller_id: int,
+    data: SellerRatingCreate,
+    account: CustomerAccount,
+    service: OrderServiceDep,
+):
+    return await service.rate_seller(account.customer_id, order_id, seller_id, data)
 
 
 @router.post("/orders/{order_id}/pay", response_model=OrderDetail)

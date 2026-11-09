@@ -102,6 +102,7 @@ Missing or invalid tokens return 401; a valid token with the wrong role returns
 | POST | `/customer/orders` | customer | Checkout: optional `delivery_address`, `payment_status` `pending` (default) or `paid` |
 | GET | `/customer/orders` | customer | Order history with items, newest first; optional `order_status` filter |
 | GET | `/customer/orders/{order_id}` | customer | One order with order and payment status |
+| PUT | `/customer/orders/{order_id}/seller-ratings/{seller_id}` | customer | Rate a seller from 1 to 5 after delivery; can be updated later |
 | POST | `/customer/orders/{order_id}/pay` | customer | Simulated payment: `pending` → `paid` |
 | POST | `/customer/orders/{order_id}/cancel` | customer | Cancel a `new` order |
 | GET, PATCH | `/seller/profile` | seller | Store profile with rating; edit store name, email, phone |
@@ -133,6 +134,9 @@ Business errors such as insufficient stock or a forbidden status change return
   status: `new` → `shipped`, `new` → `delivered`, `shipped` → `delivered`. The
   status is shared by the whole order. A customer may cancel only a `new`
   order; cancelling returns the stock and turns a `paid` order into `refunded`.
+- **Seller ratings.** After delivery, the customer may rate each seller in the
+  order from 1 to 5. A rating is unique per order and seller, can be changed,
+  and contributes to the seller's displayed average rating.
 - **Payment status.** Customers can pay a `pending` order. Administrators may
   change `pending` → `paid` and `paid` → `refunded`. A cancelled order cannot
   become paid.
@@ -174,7 +178,7 @@ without a timezone return HTTP 422.
 
 ## Upgrading an existing database
 
-New tables (`accounts`, `cart_items`) are created automatically. Two columns
+New tables (`accounts`, `cart_items`, `seller_ratings`) are created automatically. Two columns
 were added to existing tables, which startup does not alter. Either recreate the
 local database (this deletes its data):
 
