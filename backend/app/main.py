@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from os import getenv
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -19,7 +20,15 @@ from app.api.seller_cabinet import router as seller_cabinet_router
 from app.api.shop import router as shop_router
 from app.api.users import router as users_router
 from app.api.wallet import router as wallet_router
-from app.core.config import ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, REDIS_URL
+from app.core.config import (
+    ADMIN_EMAIL,
+    ADMIN_PASSWORD,
+    DATABASE_URL,
+    DEV_JWT_SECRET,
+    JWT_SECRET,
+    ON_VERCEL,
+    REDIS_URL,
+)
 from app.core.db import Base, create_engine
 from app.exceptions import (
     AuthenticationFailed,
@@ -34,9 +43,20 @@ from app.service.auth import ensure_admin_account, require_admin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if ON_VERCEL:
+        if not getenv("DATABASE_URL") or not getenv("REDIS_URL"):
+            raise RuntimeError("Set DATABASE_URL and REDIS_URL in the Vercel environment.")
+        if not JWT_SECRET or JWT_SECRET == DEV_JWT_SECRET:
+            raise RuntimeError("Set JWT_SECRET to a unique secret in the Vercel environment.")
+
     engine = create_engine(DATABASE_URL)
     try:
         async with engine.begin() as connection:
+            # Several function instances can start against an empty database together.
+            if ON_VERCEL:
+                await connection.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtext('mint_market_schema'))")
+                )
             await connection.run_sync(Base.metadata.create_all)
         if ADMIN_EMAIL and ADMIN_PASSWORD:
             await ensure_admin_account(engine, ADMIN_EMAIL, ADMIN_PASSWORD)
@@ -48,7 +68,7 @@ async def lifespan(app: FastAPI):
         await engine.dispose()
 
 
-app = FastAPI(title="Online Shop API", lifespan=lifespan)
+app = FastAPI(title="Online Shop API", lifespan=lifespan, root_path="/api" if ON_VERCEL else "")
 
 # Marketplace features.
 app.include_router(auth_router)
