@@ -50,6 +50,26 @@ The backend reads process environment variables, not `.env` directly. Compose
 passes database/Redis URLs, JWT secret, and administrator settings to the API.
 `ACCESS_TOKEN_EXPIRE_MINUTES` defaults to 1440 when running the backend.
 
+## Deploy on Vercel
+
+Import the repository with root directory `./` and application preset **Services**.
+The root `vercel.json` sends `/api` and `/api/*` to FastAPI and serves the Vite
+site on the same domain. Keep **Automatically expose System Environment Variables**
+enabled so the backend receives `VERCEL=1` and uses `/api` as its root path.
+
+Set these project environment variables before deploying. Use separate
+databases and secrets for production and preview deployments.
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection URI reachable from Vercel, for example `postgresql://USER:PASSWORD@HOST/DB?ssl=require`. |
+| `REDIS_URL` | Redis connection URI reachable from Vercel. Use `rediss://` when your provider requires TLS. |
+| `JWT_SECRET` | A unique, randomly generated signing secret. |
+| `ADMIN_EMAIL` and `ADMIN_PASSWORD` | Optional credentials for creating an administrator on first startup. |
+
+After deployment, open `/` for the storefront, `/api/docs` for Swagger, and
+`/api/health` to check PostgreSQL and Redis connectivity.
+
 ## Using the marketplace
 
 Browse products without signing in. Click a shop name on a product or order to
