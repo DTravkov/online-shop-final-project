@@ -4,7 +4,8 @@ from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-OrderStatus = Literal["new", "shipped", "delivered", "cancelled"]
+FulfillmentStatus = Literal["new", "shipped", "delivered", "cancelled"]
+OrderStatus = Literal["new", "partially_shipped", "shipped", "partially_delivered", "delivered", "cancelled"]
 PaymentStatus = Literal["paid", "pending", "refunded"]
 
 
@@ -30,7 +31,7 @@ class OrderRead(OrderCreate):
 class CheckoutRequest(BaseModel):
     # Omit to deliver to the customer's default delivery address.
     delivery_address: str | None = Field(default=None, min_length=1, max_length=255)
-    # Payment simulation: "paid" pays immediately, "pending" pays later.
+    # "paid" charges the buyer balance now; "pending" leaves payment for later.
     payment_status: Literal["paid", "pending"] = "pending"
 
 
@@ -58,14 +59,24 @@ class OrderItemDetail(BaseModel):
         )
 
 
+class FulfillmentRead(BaseModel):
+    fulfillment_id: int
+    seller_id: int
+    store_name: str
+    status: FulfillmentStatus
+
+
 class OrderDetail(OrderRead):
     items: list[OrderItemDetail]
+    fulfillments: list[FulfillmentRead]
 
 
 class SellerOrderRead(BaseModel):
     order_id: int
     order_date: datetime
-    order_status: OrderStatus
+    # This seller's status; the overall status is exposed separately.
+    order_status: FulfillmentStatus
+    overall_order_status: OrderStatus
     payment_status: PaymentStatus
     delivery_address: str | None
     customer_name: str

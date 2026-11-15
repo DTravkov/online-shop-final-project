@@ -1,273 +1,177 @@
-# Repository guidance
+# Working in this repository
 
-## Purpose and scope
+## What this project is
 
-This repository is the foundation for a marketplace similar to Wildberries.
-It provides a single FastAPI application in `backend/` with role-based
-marketplace APIs (customers, sellers, administrators), admin-only table CRUD,
-PostgreSQL persistence, a Redis health check, and a minimal React + Vite
-frontend in `front/`.
+Mint Market is a small marketplace with a React frontend and one FastAPI backend.
+Customers browse shops, buy products, track deliveries, and review sellers.
+Sellers manage their listings and fulfill their own part of each order.
+Administrators use protected APIs for table management, payments, and analytics.
+Payments use internal balances with free testing deposits; no bank is connected.
+PostgreSQL stores application data; Redis only supports
+health checks. Keep improvements outside the requested scope as proposals.
 
-Follow the architecture and behavior described below when making requested
-changes. Keep proposed improvements separate from this file and ask the project
-owner before adding them to the documented architecture or implementing them.
-
-## Project map
+## Where things live
 
 ```text
 backend/
   app/
-    main.py        # App composition, lifespan, exception handlers, root/health
-    api/           # Resource routers and HTTP contracts
-    service/       # Application operations and write transaction boundaries
-    repository/    # SQLAlchemy queries, persistence, transaction contexts
-    models/        # SQLAlchemy table definitions and model registration
-    schemas/       # Pydantic create, update, and read schemas
-    core/
-      config.py    # Environment-based database, Redis, JWT, and admin settings
-      db.py        # Declarative Base, async engine factory, session dependency
-      security.py  # Password hashing (scrypt) and JWT encode/decode
-    exceptions/    # Plain application exceptions
-    utils/         # Small shared helpers (email normalization)
-  requirements.txt     # Backend runtime dependencies
-  requirements-dev.txt # Backend development dependencies
-  Dockerfile           # Python 3.12 API image
-  .dockerignore        # Backend build context exclusions
+    api/          HTTP routes and request contracts
+    service/      Business operations and transaction boundaries
+    repository/   Async SQLAlchemy queries and persistence
+    models/       Tables; register each model in models/__init__.py
+    schemas/      Pydantic input and output models
+    core/         Environment settings, database sessions, passwords, JWTs
+    exceptions/   Plain application exceptions
+    utils/        Small shared helpers
+    main.py       App setup, lifespan, router and exception registration
+  tests/          Schema tests and PostgreSQL integration tests
+  requirements*.txt, ruff.toml, Dockerfile
 front/
   src/
-    main.jsx       # React root and global stylesheet import
-    App.jsx        # Minimal startup screen
-    index.css      # Global styles
-  index.html       # HTML entry point
-  vite.config.js   # Vite dev server, file watching, API proxy
-  package.json     # Frontend dependencies and npm scripts
-  package-lock.json # Locked dependency tree used by npm ci
-  Dockerfile       # Node.js 24 image running Vite
-  .dockerignore    # Excludes local dependencies and build output
-compose.yaml           # Frontend, API, PostgreSQL, Redis, and source reload
-.env.example           # Example Compose variables
-README.md              # Human-facing setup and API documentation
+    pages/        Catalog, cart, orders, seller cabinet, profile, auth, shop, wallet
+    components/   Shared UI
+    App.jsx       Session, navigation, catalog state, modals, notifications
+    api.js        Fetch wrappers and display formatting
+    helpers.js    Product visuals and translated statuses
+    index.css     Shared styles
+  package.json, package-lock.json, vite.config.js, Dockerfile
+compose.yaml, .env.example, README.md
+.github/          CI and dependency updates
 ```
 
-`backend/` and `front/` are independent build contexts. Keep shared Compose
-configuration, environment examples, Git ignores, and documentation at the root.
-The backend Python package is still named `app`; preserve `from app...` imports
-and the `app.main:app` entry point. Run backend Python commands from `backend/`.
+Backend and frontend are separate Docker build contexts. Keep shared setup and
+documentation at the root. Run Python commands from `backend/`, npm commands
+from `front/`, and Compose commands from the root. The backend package remains
+`app`, with entry point `app.main:app`. Keep the existing singular `service`
+and `repository` names and resource-specific classes.
 
-The package names `service` and `repository` are singular. Resource modules
-are singular except for the existing `backend/app/api/users.py`; follow the
-surrounding code rather than renaming files as part of unrelated work.
+## Backend conventions
 
-## Layer responsibilities
+The request flow is `router -> service -> repository -> AsyncSession -> database`.
 
-Request dependency flow:
+- Routers declare paths, schemas, statuses, query validation, and dependencies.
+  Inject services with `Annotated[..., Depends(...)]`; keep SQL out of handlers.
+- Services enforce business rules and ownership, choose transactions, and return
+  Pydantic read schemas using `model_validate`. Raise application exceptions.
+- Repositories return ORM records. Writes flush (and refresh where needed),
+  but never commit independently. Feature services can use several repositories.
+- Schemas validate inputs; read schemas use `ConfigDict(from_attributes=True)`.
+  Use `model_dump` for validated writes. Models use `Mapped` and `mapped_column`.
+- Register new routers and exception handlers in `main.py`, and new models in
+  `models/__init__.py`. Put dependency factories alongside their classes.
 
-```text
-router -> service -> repository -> AsyncSession -> database
-```
+One request shares one session (`expire_on_commit=False`). Start the service's
+write transaction **before any lookup**: a read starts an implicit transaction,
+so calling `begin()` afterwards fails. Authentication dependencies validate JWTs
+without a database query for this reason. A repository transaction commits on
+success and rolls back on any exception, including errors after a flush.
+Marketplace transaction contexts translate `IntegrityError` to `RecordConflict`.
+The public example user repository is the simpler exception to this pattern.
 
-- **API:** Declare paths, request/response schemas, status codes, and query
-  validation. Inject a service using `Annotated[..., Depends(...)]`. Keep SQL
-  and application operations out of route handlers.
-- **Service:** Coordinate an operation, detect missing records, choose write
-  transaction boundaries, and return Pydantic read schemas. Raise the existing
-  plain application exceptions rather than HTTP exceptions.
-- **Repository:** Query and mutate ORM records using the injected async session.
-  Return ORM records to services. Keep HTTP concerns out of this layer.
-- **Models:** Define tables, column types, primary keys, and foreign keys using
-  SQLAlchemy `Mapped` and `mapped_column`. Import each model in
-  `backend/app/models/__init__.py` so it belongs to the startup metadata.
-- **Schemas:** Define input validation and output shape. Read schemas use
-  `ConfigDict(from_attributes=True)`; services convert ORM records with
-  `model_validate`. Writes use validated data through `model_dump`, except the
-  example user repository, which accepts the name directly.
-- **Composition:** Register routers and exception handlers in `backend/app/main.py`.
-  Dependency factories live alongside their service or repository.
+Lock mutable rows inside transactions. Checkout locks the customer before reading
+the cart and locks products by primary key. Fulfillment updates and cancellations
+lock the parent order so concurrent sellers cannot lose aggregate status updates.
+Review writes lock the seller and update its average rating in the same transaction.
+Wallet transfers lock all participating accounts in primary-key order and refresh
+existing ORM state while locking. Deposits, debits, credits, ledger entries, and
+payment status must commit/roll back together. WalletService charge/refund helpers
+run inside their calling order service transaction; they never begin another one.
 
-Use the existing resource-specific classes. There are no generic base services,
-base repositories, separate domain layer, or microservices in this project.
+Exception mapping: missing records -> 404, conflicts -> 409, authentication -> 401
+with `WWW-Authenticate: Bearer`, permissions -> 403, business rules -> 400.
+FastAPI validation errors return 422. Error bodies use `detail`.
 
-Marketplace features use feature services that take several repositories:
-`auth`, `catalog`, `customer_profile`, `cart`, `customer_order`,
-`seller_store`, `seller_order`, and `admin`. Their routers are `api/auth.py`
-(`/auth`), `api/catalog.py` (`/catalog`), `api/customer_cabinet.py`
-(`/customer`), `api/seller_cabinet.py` (`/seller`), and `api/admin.py`
-(`/admin`). Repositories created in one request share its session, so one
-repository's `transaction()` covers writes made through the others.
-`repository/analytics.py` holds read-only aggregate queries and has no model.
+## Marketplace rules to preserve
 
-## Frontend
+- `/auth`: customer/seller registration and login. Accounts contain normalized,
+  unique email, scrypt password hash, JWT identity, role, and linked profile.
+  Administrators are created at startup from environment settings.
+- `/catalog`: public products, product offers, shop profiles, and buyer reviews.
+  Listings of the same product are matched by trimmed, case-insensitive name.
+- `/customer`: own profile, address, PostgreSQL cart, orders, payments, cancellation,
+  and own seller review. `/seller`: own profile, listings, and fulfillments.
+  `/admin`: analytics, all orders, and payment status management.
+- Checkout creates one order with price snapshots and one `fulfillments` row per
+  seller, reserves stock, and clears the cart atomically. Each marketplace order
+  item links to its fulfillment, preserving the original seller.
+- Sellers change only their own fulfillment: `new -> shipped/delivered` and
+  `shipped -> delivered`. Seller API `order_status` and its list filter refer to
+  that seller's status; `overall_order_status` describes the whole order.
+- Customer/admin orders expose all `fulfillments`. Overall status is `new`,
+  `partially_shipped`, `shipped`, `partially_delivered`, `delivered`, or `cancelled`.
+  All seller parts must arrive before the whole order becomes delivered.
+- Customers cancel only wholly new orders. Cancellation marks every fulfillment
+  cancelled, restores stock, and refunds a paid order. Payment is order-wide:
+  `pending -> paid -> refunded`. Customers pay from their balance; admins can charge/refund using the same flow.
+- Every authentication account has a zero-initialized `Numeric(14, 2)` balance.
+  `/wallet` and `/wallet/transactions` read only the signed-in account. Any role
+  can POST `/wallet/deposit` with a positive test amount (up to two decimal places).
+  Maximum balance is 999999999999.99 KZT; do not round invalid deposit inputs.
+- Payment debits the customer and immediately credits each seller their item-price
+  subtotal. Use the fulfillment's original seller, not a reassigned listing owner.
+  Insufficient funds or any failure rolls back all participants and checkout state.
+  Pending orders reserve stock without moving money. Refunds reverse the original
+  `wallet_transactions` entries; never recalculate payouts from edited items.
+  The ledger's unique account/order/kind constraint also prevents duplicate moves.
+  Wallet history protects its accounts/orders from deletion. Raw table CRUD never
+  moves balances; a paid flag alone cannot create a balance refund.
+- Withdrawing a product sets `is_active=False`, removes it from carts, and keeps
+  order history. Money uses `Decimal`/`Numeric`; order dates require a timezone.
+- One review per customer/seller: 1-5 stars and a trimmed 1-2000 character comment.
+  Creating/editing requires a paid, delivered fulfillment from that seller.
+  Buyers can delete their own review. Ratings are averages rounded to one decimal;
+  no reviews means 0.0. Public reviews expose buyer names, never login details.
+- Admin-only table CRUD remains separate from marketplace rules: `/customers`,
+  `/sellers`, `/products`, `/orders`, `/order-items`. `/users` is a public example,
+  unrelated to accounts. CRUD PUT replaces all writable fields; POST returns 201,
+  DELETE 204. Lists default to offset 0/limit 20, maximum 100. Raw CRUD does not
+  create fulfillments or recalculate prices, stock, totals, ratings, or balances.
+- Foreign keys reject invalid references and referenced-parent deletions with 409.
+  Accounts/cart entries cascade with profiles; fulfillments cascade with orders.
+  Order items must be removed before deleting an order. Reviews must be removed
+  before deleting their customer/seller.
 
-- `front/` is an independent JavaScript React application built with Vite.
-  Keep browser code here and backend operations in `backend/app/`.
-- `src/main.jsx` mounts `App` inside React StrictMode and imports global styles.
-  There are no marketplace pages, client-side routes, or state libraries yet.
-- Use npm and preserve `package-lock.json`. The scripts are `dev`, `build`,
-  and `preview`; build output goes to `front/dist/` and is ignored by Git.
-- Vite listens on `0.0.0.0:5173` with a strict port. Its development proxy maps
-  `/api/*` to the backend, removing `/api`. Use relative `/api/...` URLs for
-  browser requests rather than Docker service names.
-- `API_PROXY_TARGET` configures the server-side proxy: Compose sets
-  `http://api:8000`; outside Docker it defaults to `http://localhost:8000`.
-  `USE_POLLING=true` enables file polling in Docker for mounted sources.
-- The proxy runs in Vite's development and local preview servers. Built static
-  assets do not include the proxy; production hosting needs its own API routing.
+## Frontend conventions
 
-## Sessions, transactions, and errors
+The balance page supports deposits and paginated transaction history for every role.
+Refresh displayed balances after deposits, payments, refunds, and page/focus changes.
+Use React hooks and props; there is no routing/state library or StrictMode wrapper.
+Navigation uses URL hashes; public shop links are `#/shops/{seller_id}` and work
+on refresh and browser back/forward. Keep customer and seller workflows separate.
+Session data and JWTs live in localStorage and are passed to `api.js` explicitly.
 
-- Application lifespan creates the async database engine and Redis client,
-  stores them on `app.state`, and closes them on shutdown.
-- `get_db` provides one request-scoped `AsyncSession` with
-  `expire_on_commit=False`, closing it after use.
-- A service write wraps the entire operation, including any record lookup,
-  in `async with self.repository.transaction():`.
-- That context uses `AsyncSession.begin()`: successful exit commits and an
-  exception rolls back. Repository create/update/delete methods flush changes;
-  they do not commit independently. Create/update also refresh the record.
-- Marketplace repository transaction contexts translate `IntegrityError` into
-  `RecordConflict`. The example user repository exposes `db.begin()` directly.
-- `backend/app/main.py` maps `RecordNotFound` and `UserNotFound` to HTTP 404,
-  `RecordConflict` to HTTP 409, `AuthenticationFailed` to HTTP 401 (with
-  `WWW-Authenticate: Bearer`), `PermissionDenied` to HTTP 403, and
-  `BusinessRuleViolation` to HTTP 400, using a JSON `detail` field. Request
-  validation uses FastAPI's HTTP 422 responses.
-- `AsyncSession.begin()` fails if the session already has a transaction, and
-  any read starts one. A write method must therefore enter `transaction()`
-  before its first query. For the same reason, the authentication dependencies
-  in `service/auth.py` verify the JWT without querying the database.
-- Rows that concurrent requests may change (stock, order status) are locked
-  with `SELECT ... FOR UPDATE` inside the transaction; checkout locks products
-  in primary-key order.
+Use relative `/api/...` URLs. Vite strips `/api` and proxies to `API_PROXY_TARGET`
+(default `http://localhost:8000`, Compose `http://api:8000`). The server listens
+on `0.0.0.0:5173` with a strict port; `USE_POLLING=true` helps Docker file watching.
+Preview uses the same proxy; production static hosting needs its own API routing.
+Preserve npm and the lockfile; rebuild images after dependency changes.
 
-Preserve rollback behavior, including when an exception occurs after a flush.
+## Running and checking changes
 
-## Resources and existing API behavior
+See README for setup. Docker uses Python 3.12, Node.js 24, PostgreSQL 17, Redis 7.
+Compose mounts backend app and frontend source for reload. Settings come from the
+process environment; the app does not read `.env` itself. Startup calls
+`Base.metadata.create_all`; schema changes are applied by recreating the database.
+Do not add migrations or upgrade SQL for this stage. Never reset user data unless
+explicitly asked. Keep credentials, virtual environments, caches, and build output
+out of Git.
 
-Table CRUD routes are registered in `main.py` with an admin-only dependency;
-the example users stay public.
-
-| Resource | Route prefix | Primary key |
-| --- | --- | --- |
-| Example users | `/users` | `id` |
-| Customers | `/customers` | `customer_id` |
-| Sellers | `/sellers` | `seller_id` |
-| Products | `/products` | `product_id` |
-| Orders | `/orders` | `order_id` |
-| Order items | `/order-items` | `order_item_id` |
-
-Each resource has POST and list GET on its prefix, and GET, PUT, DELETE on
-`/{primary_key}`. POST returns 201; DELETE returns 204 with an empty body.
-PUT requires all writable fields and performs a full replacement. Lists return
-JSON arrays ordered by primary key, with `offset=0`, `limit=20`, nonnegative
-offsets, and limits from 1 to 100.
-
-Relationships are database foreign keys:
-
-```text
-sellers   <- products
-customers <- orders
-orders    <- order_items -> products
-customers <- accounts -> sellers      (nullable, unique, ON DELETE CASCADE)
-customers <- cart_items -> products   (ON DELETE CASCADE)
-```
-
-Invalid references and deletion of referenced parents return 409. Dependent
-records must be deleted first, except accounts and cart items, which cascade.
-The example user is independent of customers and sellers; it does not represent
-an authentication account. `accounts` holds the login email (unique,
-lowercase), password hash, role (`customer`, `seller`, `admin`), and the linked
-profile. `products.is_active` marks withdrawn products and
-`orders.delivery_address` stores the checkout address (nullable for CRUD
-orders).
-
-Use the existing `Decimal`/`Numeric` types for monetary fields and the seller
-rating. Preserve schema constraints and the allowed order/payment status values.
-
-`order_date` uses `DateTime(timezone=True)` in the model and `AwareDatetime`
-in the schemas. Create and update requests must include `Z` or an explicit UTC
-offset; timezone-less dates return 422. PostgreSQL preserves the instant rather
-than the original offset.
-
-Through the table CRUD routes, orders and order items stay independent:
-callers supply prices, totals, stock, dates, and statuses, and nothing is
-recalculated. The marketplace routes apply the business rules documented in
-`README.md`: checkout turns the whole cart into one order (snapshotting prices,
-reserving stock, emptying the cart); sellers move orders containing their
-products `new` → `shipped`/`delivered` and `shipped` → `delivered`; customers
-cancel only `new` orders, which returns stock and refunds paid orders;
-administrators change payment `pending` → `paid` → `refunded`; deleting a
-seller's product withdraws it. The cart lives in PostgreSQL. Redis currently
-supports the health check only.
-
-## Runtime and configuration
-
-- Runtime dependencies are FastAPI, Uvicorn, async SQLAlchemy, asyncpg,
-  redis-py, and PyJWT.
-- `backend/app/core/config.py` reads `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`,
-  `ACCESS_TOKEN_EXPIRE_MINUTES`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` from the
-  process environment. When both admin variables are set, startup creates that
-  administrator account if no account uses the email. The application does not load `.env` itself. Compose reads its
-  variables and supplies the connection URLs to the API container.
-- `create_engine` converts `postgresql://` URLs to `postgresql+asyncpg://`.
-- Startup imports `app.models` and runs `Base.metadata.create_all`. This creates
-  missing tables directly from the model definitions, including `order_date` as
-  `TIMESTAMP WITH TIME ZONE`. Existing table definitions are not changed by
-  startup. No separate schema upgrade scripts are used at this stage; when a
-  column is added to an existing table, document the `ALTER TABLE` in
-  `README.md` (see "Upgrading an existing database").
-- `/health` checks both the database (`SELECT 1`) and Redis (`PING`), returning
-  503 if either check fails.
-- Compose runs PostgreSQL 17 and Redis 7 with persistent volumes and publishes
-  the API on port 8000 and frontend on port 5173 by default. `API_PORT` and
-  `FRONT_PORT` control the published ports. It mounts `backend/app/` at `/app/app`
-  for API reload and `front/src/`, `front/index.html`, and `front/vite.config.js`
-  for frontend reload.
-- The frontend image uses Node.js 24 and installs locked dependencies with
-  `npm ci`. Dependencies remain in the image; rebuild after package or lockfile
-  changes. API builds use `backend/Dockerfile` with `backend/` as their context;
-  frontend builds use `front/Dockerfile` with `front/` as their context.
-
-Keep credentials in environment configuration. Do not commit `.env`, virtual
-environments, caches, or generated files.
-
-## Development
-
-Run Compose commands from the repository root and backend Python commands from
-`backend/`. Backend dependency files and the API Dockerfile live in `backend/`.
-The Docker runtimes use Python 3.12 and Node.js 24.
-
-Run Compose stack:
+Backend checks (Python 3.12, development requirements installed):
 
 ```sh
-docker compose up
+python -m pytest
+ruff check .
 ```
 
-For the standard stack, copy `.env.example` to `.env` if needed, as described
-in `README.md`. The frontend is at `http://localhost:5173`; the API and Swagger
-UI are at `http://localhost:8000` and `/docs`. Add `--build` after dependency or
-Dockerfile changes, and `-d` for background operation.
+API tests require `TEST_DATABASE_URL` pointing to a disposable PostgreSQL database:
+the fixture drops all tables before each test. Without it, database tests skip.
+`tests/conftest.py` provides signed-in actor and product helpers.
 
-Backend tests run from `backend/` with `python -m pytest`. API tests need
-`TEST_DATABASE_URL` pointing to a disposable PostgreSQL database (wiped before
-each test); without it they are skipped. `tests/conftest.py` provides helpers
-for registering customers and sellers and signing in as the administrator.
+Frontend checks: `npm ci`, then `npm run build`; `npm run dev` starts development.
+Local Node must be 20.19+ or 22.12+. Use `npm.cmd` on PowerShell when needed.
+CI runs Ruff, PostgreSQL tests, frontend build, and Docker image builds.
 
-For frontend-only development, run `npm ci` then `npm run dev` from `front/`
-with Node.js 20.19+ or 22.12+. Use `npm.cmd` on PowerShell if needed. The local
-API must be running separately for proxied requests. `npm run build` produces
-the static frontend, and `npm run preview` serves it locally.
-
-## Making changes
-
-- Read the corresponding model, schema, repository, service, and router
-  before changing a resource. Use a marketplace resource such as `customer`
-  as the reference for its existing CRUD pattern.
-- Keep changes focused on the request. Preserve public paths, field names,
-  status codes, and replacement semantics unless changing them is in scope.
-- For an authorized new resource, add its model, schemas, repository, service,
-  and router; register the model and router.
-- Keep database operations asynchronous. Match the existing Python naming,
-  annotations, and explicit imports.
-- Update `README.md` when an implemented change affects setup or API behavior.
-  Update this file when an approved change alters the architecture or workflow.
-- Report changed behavior, checks performed, and any checks that could not run.
+Before changing a resource, read its corresponding layers and tests. Keep changes
+focused, preserve unrelated contracts, and update README for user-facing behavior.
+Update this file when an approved change alters architecture or workflow. Report
+what changed, which checks passed, and what could not be verified.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiGet, apiPost, getErrorMessage } from './api.js'
+import { apiGet, apiPost, formatPrice, getErrorMessage } from './api.js'
 import { Button, Icon } from './components/Common.jsx'
 import AuthModal from './pages/AuthModal.jsx'
 import CatalogPage, { ProductModal } from './pages/CatalogPage.jsx'
@@ -7,6 +7,8 @@ import CartPage from './pages/CartPage.jsx'
 import OrdersPage from './pages/OrdersPage.jsx'
 import SellerPage from './pages/SellerPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
+import ShopPage from './pages/ShopPage.jsx'
+import WalletPage from './pages/WalletPage.jsx'
 
 const SESSION_KEY = 'mint-market-session'
 
@@ -34,12 +36,20 @@ function saveSession(session) {
   }
 }
 
+function readLocation() {
+  const match = window.location.hash.match(/^#\/shops\/([1-9]\d*)$/)
+  if (match) return { page: 'shop', sellerId: Number(match[1]) }
+  const page = window.location.hash.slice(1)
+  return { page: ['cart', 'orders', 'seller', 'profile', 'wallet'].includes(page) ? page : 'catalog', sellerId: null }
+}
+
 let toastTimer = null
 
 // Главный компонент всего сайта.
 export default function App() {
   const [session, setSession] = useState(readSession)
-  const [page, setPage] = useState('catalog')
+  const [page, setPage] = useState(() => readLocation().page)
+  const [shopId, setShopId] = useState(() => readLocation().sellerId)
 
   const [authOpen, setAuthOpen] = useState(false)
   const [authNextPage, setAuthNextPage] = useState('catalog')
@@ -56,12 +66,28 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [busyProduct, setBusyProduct] = useState(null)
   const [cartCount, setCartCount] = useState(0)
+  const [balance, setBalance] = useState(null)
   const [toast, setToast] = useState('')
 
   let role = null
   if (session) {
     role = session.role
   }
+
+  useEffect(() => {
+    function followLocation() {
+      const location = readLocation()
+      setPage(location.page)
+      setShopId(location.sellerId)
+      setSelectedProduct(null)
+    }
+    window.addEventListener('hashchange', followLocation)
+    window.addEventListener('popstate', followLocation)
+    return () => {
+      window.removeEventListener('hashchange', followLocation)
+      window.removeEventListener('popstate', followLocation)
+    }
+  }, [])
 
   // Показать короткое сообщение пользователю.
   function showToast(message) {
@@ -139,6 +165,34 @@ export default function App() {
     }
   }, [session])
 
+  async function refreshBalance() {
+    if (!session) return
+    try {
+      const wallet = await apiGet('/wallet', session.access_token)
+      setBalance(wallet.balance)
+    } catch (error) {
+      setBalance(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!session) {
+      setBalance(null)
+      return
+    }
+    let active = true
+    function loadBalance() {
+      apiGet('/wallet', session.access_token).then((wallet) => {
+        if (active) setBalance(wallet.balance)
+      }).catch(() => {
+        if (active) setBalance(null)
+      })
+    }
+    loadBalance()
+    window.addEventListener('focus', loadBalance)
+    return () => { active = false; window.removeEventListener('focus', loadBalance) }
+  }, [session, page])
+
   // Открыть окно входа или регистрации.
   function openAuth(nextPage) {
     let pageAfterLogin = 'catalog'
@@ -154,7 +208,7 @@ export default function App() {
   // Перейти на другую страницу сайта.
   function navigate(nextPage) {
     // Все страницы кроме каталога требуют входа.
-    if (nextPage !== 'catalog') {
+    if (nextPage !== 'catalog' && nextPage !== 'shop') {
       if (!session) {
         openAuth(nextPage)
         return
@@ -188,6 +242,7 @@ export default function App() {
     }
 
     setPage(nextPage)
+    window.history.pushState(null, '', '#' + nextPage)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -197,6 +252,7 @@ export default function App() {
     saveSession(authData)
     setAuthOpen(false)
     setPage(authNextPage)
+    if (authNextPage !== 'shop') window.history.pushState(null, '', '#' + authNextPage)
 
     if (authData.role === 'seller') {
       showToast('Добро пожаловать в кабинет продавца')
@@ -208,7 +264,7 @@ export default function App() {
   // Добавить товар в корзину покупателя.
   async function addToCart(productId) {
     if (!session) {
-      openAuth('catalog')
+      openAuth(page === 'shop' ? 'shop' : 'catalog')
       showToast('Войдите или зарегистрируйтесь, чтобы добавить товар')
       return
     }
@@ -248,7 +304,9 @@ export default function App() {
 
   // Действия после оформления заказа.
   function checkoutComplete(order) {
+    refreshBalance()
     setPage('orders')
+    window.history.pushState(null, '', '#orders')
     setCartCount(0)
     loadCatalog()
     showToast('Заказ №' + order.order_id + ' успешно оформлен')
@@ -259,6 +317,7 @@ export default function App() {
     setSession(null)
     saveSession(null)
     setPage('catalog')
+    window.history.pushState(null, '', '#catalog')
     setCartCount(0)
     showToast('Вы вышли из аккаунта')
   }
@@ -277,6 +336,8 @@ export default function App() {
     navItems.push({ id: 'seller', label: 'Мой магазин' })
     navItems.push({ id: 'orders', label: 'Заказы' })
   }
+
+  if (session) navItems.push({ id: 'wallet', label: 'Баланс' })
 
   return (
     <div className="app-shell">
@@ -306,7 +367,7 @@ export default function App() {
           <div className="header-actions">
             {session ? (
               <>
-                <button className="header-user" onClick={() => navigate('profile')}>
+                <button className="header-user" onClick={() => navigate(role === 'admin' ? 'wallet' : 'profile')}>
                   <span className="user-avatar">{role === 'seller' ? 'S' : 'M'}</span>
                   <span>
                     <small>Вы вошли как</small>
@@ -317,8 +378,8 @@ export default function App() {
               </>
             ) : (
               <>
-                <button className="login-link" onClick={() => openAuth('catalog')}>Войти</button>
-                <Button onClick={() => openAuth('catalog')}>Создать аккаунт <Icon name="arrow" /></Button>
+                <button className="login-link" onClick={() => openAuth(page === 'shop' ? 'shop' : 'catalog')}>Войти</button>
+                <Button onClick={() => openAuth(page === 'shop' ? 'shop' : 'catalog')}>Создать аккаунт <Icon name="arrow" /></Button>
               </>
             )}
           </div>
@@ -333,7 +394,8 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className="nav-caption"><span className="online-dot" /> Открыто для покупок</div>
+          {session ? <button className="header-balance" onClick={() => navigate('wallet')}>Баланс: {balance === null ? '…' : formatPrice(balance)}</button>
+            : <div className="nav-caption"><span className="online-dot" /> Открыто для покупок</div>}
         </div>
       </header>
 
@@ -359,12 +421,17 @@ export default function App() {
           />
         ) : null}
 
+        {page === 'shop' && shopId ? <ShopPage key={shopId} sellerId={shopId} session={session}
+          onOpen={openProduct} onAdd={addToCart} busyProduct={busyProduct} showToast={showToast}
+          onReviewsChanged={loadCatalog} /> : null}
+
         {page === 'cart' ? (
           session ? (
             role === 'customer' ? <CartPage
             token={session.access_token}
             onCheckoutComplete={checkoutComplete}
             onCartChange={setCartCount}
+            goToWallet={() => navigate('wallet')}
             showToast={showToast}
             goToCatalog={() => navigate('catalog')}
           /> : null
@@ -372,7 +439,7 @@ export default function App() {
         ) : null}
 
         {page === 'orders' ? (
-          session ? <OrdersPage token={session.access_token} role={role} showToast={showToast} /> : null
+          session ? <OrdersPage token={session.access_token} role={role} showToast={showToast} onBalanceChanged={refreshBalance} /> : null
         ) : null}
 
         {page === 'seller' ? (
@@ -385,11 +452,13 @@ export default function App() {
           ) : null
         ) : null}
 
+        {page === 'wallet' && session ? <WalletPage token={session.access_token} showToast={showToast} onBalanceChange={setBalance} /> : null}
+
         {page === 'profile' ? (
           session ? <ProfilePage token={session.access_token} role={role} showToast={showToast} /> : null
         ) : null}
 
-        {page !== 'catalog' ? (
+        {page !== 'catalog' && page !== 'shop' ? (
           !session ? (
             <div className="empty-state">
               <h3>Необходимо войти в аккаунт</h3>

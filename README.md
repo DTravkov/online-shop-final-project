@@ -1,301 +1,237 @@
-# Online Shop
+# Mint Market
 
-FastAPI backend and React + Vite frontend, with PostgreSQL and Redis, using
-Docker Compose.
+A small marketplace built with React, FastAPI, PostgreSQL, and Redis.
+Customers can shop from several sellers in one checkout. Each seller handles
+its own delivery, and buyers can review a shop after receiving a paid purchase.
 
-## Application structure
+## What works today
 
-```text
-backend/
-  app/
-    api/          # HTTP routes
-    service/      # Application operations and transaction boundaries
-    repository/   # Database queries
-    models/       # SQLAlchemy models
-    schemas/      # Pydantic request and response schemas
-    core/         # Configuration and database session
-    exceptions/   # Plain application exceptions
-    utils/        # Reserved for small shared helpers
-    main.py       # Application setup, lifespan, exception mapping, health check
-  requirements.txt     # Backend runtime dependencies
-  requirements-dev.txt # Backend development dependencies
-  Dockerfile           # Python API image
-  .dockerignore        # Backend build context exclusions
-front/
-  src/          # React entry point, app component, and styles
-  index.html    # HTML entry point
-  vite.config.js # Dev server and API proxy
-  Dockerfile    # Node.js frontend image
-compose.yaml    # Shared stack configuration
-.env.example    # Shared Compose environment example
-```
+- Public catalog with search, sorting, stock filters, and seller offers.
+- Public shop pages with available products, average ratings, and buyer comments.
+- Customer and seller registration, login, and profile editing.
+- A persistent cart, checkout, order history, balance payments, and cancellation.
+- Personal balances, free test deposits, seller revenue, and transaction history.
+- Seller product management and independent delivery status for each shop.
+- Administrator APIs for payments, analytics, and direct table management.
 
-`backend/` and `front/` are separate Docker build contexts. Backend Python
-commands run from `backend/`, where `app/` remains the application package;
-imports such as `from app.main import app` are unchanged. Run Compose commands
-from the repository root. Shared environment configuration and documentation
-also stay in the root.
+The interface is in Russian, with prices displayed in tenge (KZT). Product visuals
+are generated from names; there are no product photo uploads. Payments are a
+simulation, and there is no administrator dashboard yet.
 
-Dependencies flow `router -> service -> repository -> database` using
-FastAPI `Depends`. Each request gets an async SQLAlchemy session, closed after
-the request. Services define write transaction boundaries using the repository's
-transaction context: success commits and exceptions roll back. Repository writes
-only flush changes, so multiple writes can share one service transaction. Services return
-Pydantic schemas and raise plain exceptions; the application maps missing records
-to HTTP 404, database integrity conflicts to HTTP 409, authentication failures to
-401, role violations to 403, and business rule violations to 400. There are no
-generic base repositories or service abstractions.
+## Start with Docker
 
-The example user has an integer `id` and a `name` (1–100 characters):
-
-- `POST /users` — create with `{"name": "Alice"}`
-- `GET /users?offset=0&limit=20` — list (maximum 100 per request)
-- `GET /users/{user_id}` — read
-- `PUT /users/{user_id}` — replace the name
-- `DELETE /users/{user_id}` — delete, returning HTTP 204
-
-SQLAlchemy models define the database schema. Missing tables are created on
-startup, including the timezone-aware order date column. Existing table
-definitions are not changed by startup (see
-[Upgrading an existing database](#upgrading-an-existing-database)). The example
-user is independent of marketplace accounts and has no authentication.
-
-## Accounts and authentication
-
-Customers and sellers register themselves; each registration creates a profile
-(`customers` or `sellers` row) and an `accounts` row holding the login email,
-a scrypt password hash, and the role (`customer`, `seller`, or `admin`). Emails
-are trimmed, lowercased, and unique across all accounts.
-
-Registration and login return a JWT access token. Send it on every protected
-request:
-
-```text
-Authorization: Bearer <access_token>
-```
-
-In Swagger UI, press **Authorize** and paste the token. Tokens are signed with
-`JWT_SECRET` and expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (default 1440).
-Administrators cannot self-register: when `ADMIN_EMAIL` and `ADMIN_PASSWORD`
-are set, startup creates that administrator account if it is missing. Compose
-defaults them to `admin@shop.local` / `admin12345` for local development.
-
-Missing or invalid tokens return 401; a valid token with the wrong role returns
-403.
-
-## Marketplace API
-
-| Method | Path | Who | Purpose |
-| --- | --- | --- | --- |
-| POST | `/auth/register/customer` | anyone | Create a customer account (full name, email, phone, delivery address, password) |
-| POST | `/auth/register/seller` | anyone | Create a seller account (store name, email, phone, password); rating starts at 0.0 |
-| POST | `/auth/login` | anyone | Exchange email and password for a token |
-| GET | `/auth/me` | signed in | Current account |
-| GET | `/catalog/products` | anyone | Catalog: `search` (name, case-insensitive), `seller_id`, `in_stock`, `sort` (`id`, `price_asc`, `price_desc`, `name`), `offset`, `limit` |
-| GET | `/catalog/products/{product_id}` | anyone | Product card: name, price, stock, seller, and `offers` from every seller of the same product name |
-| GET, PATCH | `/customer/profile` | customer | View or edit full name, email, phone |
-| GET, PUT | `/customer/delivery-address` | customer | Default delivery address |
-| GET | `/customer/cart` | customer | Cart with items, availability, and totals |
-| POST | `/customer/cart/items` | customer | Add a product (`product_id`, `quantity`); repeats increase the quantity |
-| PUT, DELETE | `/customer/cart/items/{product_id}` | customer | Set the quantity or remove the item |
-| DELETE | `/customer/cart` | customer | Empty the cart |
-| POST | `/customer/orders` | customer | Checkout: optional `delivery_address`, `payment_status` `pending` (default) or `paid` |
-| GET | `/customer/orders` | customer | Order history with items, newest first; optional `order_status` filter |
-| GET | `/customer/orders/{order_id}` | customer | One order with order and payment status |
-| POST | `/customer/orders/{order_id}/pay` | customer | Simulated payment: `pending` → `paid` |
-| POST | `/customer/orders/{order_id}/cancel` | customer | Cancel a `new` order |
-| GET, PATCH | `/seller/profile` | seller | Store profile with rating; edit store name, email, phone |
-| GET, POST | `/seller/products` | seller | Own products (`include_inactive` to show withdrawn ones); add a product |
-| GET, PATCH, DELETE | `/seller/products/{product_id}` | seller | View, edit (name, price, stock, `is_active`), or withdraw from sale |
-| GET | `/seller/orders` | seller | Orders containing the seller's products; optional `order_status` filter |
-| GET | `/seller/orders/{order_id}` | seller | One such order with only the seller's items |
-| PATCH | `/seller/orders/{order_id}/status` | seller | Move the order to `shipped` or `delivered` |
-| GET | `/admin/analytics/top-products` | admin | Best sellers by units (`limit`, default 5) |
-| GET | `/admin/analytics/summary` | admin | Counts of users, products, and orders by status; items sold; paid revenue |
-| GET | `/admin/orders` | admin | All orders; `order_status` and `payment_status` filters |
-| GET | `/admin/orders/{order_id}` | admin | One order with items |
-| PATCH | `/admin/orders/{order_id}/payment-status` | admin | Change the payment status |
-
-Business errors such as insufficient stock or a forbidden status change return
-400 with a `detail` message.
-
-### Business rules
-
-- **Cart.** Only active products can be added. The quantity in the cart cannot
-  exceed the current stock. Withdrawn products are removed from every cart.
-- **Checkout.** One checkout creates one order for the whole cart, even when it
-  contains several sellers' products. Within one transaction it locks the
-  products, checks availability, stores each item's current price as
-  `unit_price`, computes `total_amount`, reduces stock, and empties the cart.
-  Concurrent checkouts cannot oversell. The order starts as `new`; the delivery
-  address defaults to the customer's profile address.
-- **Order status.** A seller whose products are in the order may change its
-  status: `new` → `shipped`, `new` → `delivered`, `shipped` → `delivered`. The
-  status is shared by the whole order. A customer may cancel only a `new`
-  order; cancelling returns the stock and turns a `paid` order into `refunded`.
-- **Payment status.** Customers can pay a `pending` order. Administrators may
-  change `pending` → `paid` and `paid` → `refunded`. A cancelled order cannot
-  become paid.
-- **Products.** Sellers manage only their own products. Deleting a product
-  withdraws it from sale (`is_active = false`); it stays in order history and
-  can be returned to sale with `is_active: true`. Sellers cannot change their
-  rating.
-- **Analytics.** Top products and items sold ignore cancelled and refunded
-  orders. Paid revenue sums paid, non-cancelled orders.
-
-## Table CRUD
-
-Each table also has raw CRUD routes. They bypass the business rules above, so
-they **require an administrator token**:
-
-| Resource | Base path | Primary key |
-| --- | --- | --- |
-| Customers | `/customers` | `customer_id` |
-| Sellers | `/sellers` | `seller_id` |
-| Products | `/products` | `product_id` |
-| Orders | `/orders` | `order_id` |
-| Order items | `/order-items` | `order_item_id` |
-
-All support `POST` and paginated `GET` on the base path, plus `GET`, `PUT`, and
-`DELETE` on `/{primary_key}`. Creates return 201; deletes return 204. Lists use
-`offset=0&limit=20` by default, with a maximum limit of 100. PUT replaces all
-writable fields; callers supply prices, totals, stock, dates, and statuses, and
-nothing is recalculated.
-
-Foreign keys must reference existing records. Deleting a referenced parent
-returns 409; delete dependent records first. Deleting a customer or seller also
-deletes its account and cart. Failed writes roll back.
-
-Order dates must include a timezone: for example,
-`"order_date": "2026-11-05T10:31:56.731Z"` or
-`"order_date": "2026-11-05T15:31:56.731+05:00"`. PostgreSQL stores the instant
-using `TIMESTAMP WITH TIME ZONE`; the original offset is not retained. Dates
-without a timezone return HTTP 422.
-
-## Upgrading an existing database
-
-New tables (`accounts`, `cart_items`) are created automatically. Two columns
-were added to existing tables, which startup does not alter. Either recreate the
-local database (this deletes its data):
-
-```sh
-docker compose down -v
-docker compose up --build
-```
-
-or keep the data and add the columns:
-
-```sh
-docker compose exec postgres psql -U shop -d shop -c "ALTER TABLE products ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE; ALTER TABLE orders ADD COLUMN delivery_address VARCHAR(255);"
-```
-
-## Tests
-
-From `backend/`, with the development dependencies installed
-(`pip install -r requirements-dev.txt`):
-
-```sh
-TEST_DATABASE_URL=postgresql://shop:shop@localhost:5432/shop_test python -m pytest
-```
-
-API tests need an empty PostgreSQL database that they can wipe; without
-`TEST_DATABASE_URL` they are skipped and only schema tests run. With the Compose
-stack running, create one with
-`docker compose exec postgres createdb -U shop shop_test`.
-
-## Linting
-
-The backend is linted with [Ruff](https://docs.astral.sh/ruff/) (configuration in
-`backend/ruff.toml`). From `backend/`:
-
-```sh
-ruff check .
-ruff check . --fix   # apply safe automatic fixes
-```
-
-## CI/CD
-
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main` and on
-every pull request:
-
-1. **Ruff lint** - `ruff check` on the backend.
-2. **Backend tests** - `pytest` against PostgreSQL 17 and Redis 7 service containers.
-3. **Frontend build** - `npm ci` and `npm run build` with Node.js 24.
-4. **Docker images build** - builds the API and frontend images after tests pass.
-
-Dependabot (`.github/dependabot.yml`) opens weekly update pull requests for pip,
-npm, Docker base images, and GitHub Actions.
-
-## Run
-
-Install Docker with the Compose plugin, then copy the example environment file:
+From the repository root, copy the example settings and start the stack:
 
 ```sh
 cp .env.example .env
+docker compose up --build
 ```
 
-On PowerShell:
+In PowerShell, use `Copy-Item .env.example .env` instead of `cp`.
 
-```powershell
-Copy-Item .env.example .env
+| Service | Address |
+| --- | --- |
+| Marketplace | http://localhost:5173 |
+| API documentation (Swagger) | http://localhost:8000/docs |
+| API health check | http://localhost:8000/health |
+
+Compose runs Python 3.12, Node.js 24, PostgreSQL 17, and Redis 7. Source files are
+mounted for automatic reload. Rebuild after dependency or Dockerfile changes.
+Use `docker compose up -d` for background operation and `docker compose down`
+to stop; database data stays in Docker volumes.
+
+`.env.example` lists development settings. `FRONT_PORT` and `API_PORT` change the
+published ports. Replace the development JWT secret and credentials before
+exposing the app. The default administrator is `admin@shop.local` / `admin12345`.
+Startup creates it only if that email is unused; changing the password setting
+does not update an existing account.
+
+The backend reads process environment variables, not `.env` directly. Compose
+passes database/Redis URLs, JWT secret, and administrator settings to the API.
+`ACCESS_TOKEN_EXPIRE_MINUTES` defaults to 1440 when running the backend.
+
+## Using the marketplace
+
+Browse products without signing in. Click a shop name on a product or order to
+open its public page. Shop URLs look like `http://localhost:5173/#/shops/1` and
+can be shared or refreshed. Shop products and reviews have pagination.
+
+Create a customer account to add products to a cart and check out. One checkout
+creates one order, snapshots prices, reserves stock, and empties the cart. You
+can use your saved address or enter another address, and pay now or later.
+Open **Balance** to add test money to your account. Any signed-in customer, seller,
+or administrator can deposit a positive amount without a bank or payment provider.
+Balances start at zero. Amounts use up to two decimal places; the storage limit is
+999,999,999,999.99 KZT. These are testing funds, not real money.
+
+Paying debits the buyer's balance and immediately credits each seller for their
+own products at the order's saved prices. There are no platform fees. Insufficient
+funds leave a pending order unpaid; a failed pay-now checkout also rolls back its
+stock reservation and keeps the cart intact. You can top up and try again.
+The Balance page shows deposits, purchases, seller revenue, and refunds.
+
+An order has a separate delivery status for every seller. Sellers can move their
+own part from `new` to `shipped` or `delivered`, then `shipped` to `delivered`.
+The buyer sees each shop's progress and an overall summary:
+
+| Seller progress | Overall order status |
+| --- | --- |
+| Every part is new | `new` |
+| Some shipped, others still new | `partially_shipped` |
+| Every part shipped | `shipped` |
+| Some delivered, others not yet delivered | `partially_delivered` |
+| Every part delivered | `delivered` |
+| Customer cancelled before any seller progressed | `cancelled` |
+
+You can cancel only while every part is new. Cancellation restores stock and
+changes a paid order to refunded, returning funds to the buyer and reversing the
+original seller payouts. Administrator refunds use the same transfers. A refund
+never credits the buyer twice. Payment belongs to the whole order. Sellers
+cannot mark another shop's products as sent or delivered.
+
+After a seller's part is delivered and the order is paid, open that shop to leave
+1-5 stars and a comment. You can have one review per shop, edit it, or delete it.
+Comments are trimmed and limited to 2000 characters. The shop rating is the
+average of its reviews, rounded to one decimal; a shop without reviews shows
+0.0. Other shops in the same order do not need to finish delivery first.
+Cancelled, unpaid, or refunded purchases do not qualify for creating/editing a
+review. Existing reviews remain visible after a later refund.
+
+Sellers can add/edit listings, change stock and prices, and withdraw products.
+Withdrawal removes products from the public catalog and carts while preserving
+order history. A withdrawn listing can be published again.
+
+## API guide
+
+Registration/login return a JWT. Protected requests use
+`Authorization: Bearer <access_token>`; in Swagger, click **Authorize** and paste
+the token. The browser stores its session in localStorage.
+
+| Area | Main endpoints |
+| --- | --- |
+| Authentication | `POST /auth/register/customer`, `POST /auth/register/seller`, `POST /auth/login`, `GET /auth/me` |
+| Balance (all signed-in roles) | `GET /wallet`, `POST /wallet/deposit`, `GET /wallet/transactions` |
+| Catalog | `GET /catalog/products`, `GET /catalog/products/{product_id}` |
+| Public shops | `GET /catalog/sellers/{seller_id}`, `GET /catalog/sellers/{seller_id}/reviews` |
+| Customer profile | `GET/PATCH /customer/profile`, `GET/PUT /customer/delivery-address` |
+| Cart | `GET/DELETE /customer/cart`, `POST /customer/cart/items`, `PUT/DELETE /customer/cart/items/{product_id}` |
+| Customer orders | `POST/GET /customer/orders`, `GET /customer/orders/{order_id}`, `POST .../{order_id}/pay`, `POST .../{order_id}/cancel` |
+| Own seller review | `GET/PUT/DELETE /customer/sellers/{seller_id}/review` |
+| Seller cabinet | `GET/PATCH /seller/profile`, `GET/POST /seller/products`, `GET/PATCH/DELETE /seller/products/{product_id}` |
+| Seller orders | `GET /seller/orders`, `GET /seller/orders/{order_id}`, `PATCH /seller/orders/{order_id}/status` |
+| Administrator | `GET /admin/analytics/summary`, `GET /admin/analytics/top-products`, `GET /admin/orders`, `GET /admin/orders/{order_id}`, `PATCH /admin/orders/{order_id}/payment-status` |
+
+Catalog filters: `search`, `seller_id`, `in_stock`, and `sort` (`id`, `price_asc`,
+`price_desc`, `name`). Lists generally accept `offset=0&limit=20`, maximum 100.
+The main catalog UI currently displays up to 48 results; cabinet lists show the
+first 20. The shop page provides pagination for its products and comments.
+
+Customer/admin order details include `items` and `fulfillments`. Seller order
+responses contain only that seller's items: `order_status` is its own delivery
+status, and `overall_order_status` is the whole order's summary. The seller list's
+`order_status` filter also applies only to that seller. Update with a body such
+as `{"order_status":"shipped"}`. Administrator payment transitions are
+`pending -> paid -> refunded`.
+
+Deposit with `POST /wallet/deposit` and a body such as `{"amount":"1000.50"}`.
+`GET /wallet` returns the current balance and `currency: "KZT"`; transaction history
+supports `offset`/`limit` and belongs only to the signed-in account. `/auth/me` also
+includes the current balance. Duplicate order payments/refunds are rejected.
+Raw CRUD changes do not move money; a later wallet payment requires valid order
+items whose totals match and sellers with accounts. A raw paid flag without a
+wallet payment cannot be refunded to a balance.
+
+To save a review, PUT `{"rating":5,"comment":"Great service"}` to the own-review
+endpoint. GET returns `can_review` and the buyer's existing `review` (or null).
+Public reviews show the buyer's name, stars, comment, and timestamps.
+
+Direct table CRUD is administrator-only at `/customers`, `/sellers`, `/products`,
+`/orders`, and `/order-items`. Each supports POST/list GET and GET/PUT/DELETE by
+ID. POST returns 201, DELETE 204, and PUT requires all writable fields. These
+routes bypass marketplace calculations and balance transfers: orders/items are independent, and raw
+writes do not generate seller fulfillments. `/users` is a public example table,
+not an authentication resource. Accounts and orders with wallet history cannot
+be deleted through table CRUD, preserving the transaction record.
+
+Errors use JSON `detail`: 400 for business rules, 401 for missing/invalid tokens,
+403 for permissions, 404 for missing records, 409 for foreign-key/uniqueness
+conflicts, and 422 for invalid input. Order dates require `Z` or a UTC offset.
+Monetary API fields use exact decimal values, usually serialized as strings.
+See Swagger for complete request/response schemas.
+
+## Code structure
+
+```text
+backend/app/
+  api/ -> service/ -> repository/ -> PostgreSQL
+  models/       SQLAlchemy tables
+  schemas/      Pydantic validation and response shapes
+  core/         Settings, sessions, security
+  main.py       App startup, routes, error handling, health
+backend/tests/  Schema and API integration tests
+front/src/
+  pages/        Customer/seller screens, public shops, and balances
+  components/   Shared UI
+  App.jsx       Session and hash navigation
+  api.js        Requests to /api and formatting
+compose.yaml    Local services and reload configuration
+.github/        CI and Dependabot
 ```
 
-Start all services (frontend, API, PostgreSQL, and Redis):
+Services own transactions; repositories flush without committing. A request
+shares one async database session. Checkout locks stock, seller status changes
+lock the parent order, and review writes lock the shop before updating its rating.
+Wallet transfers lock all participating accounts by ID; ledger entries preserve
+original payouts for refunds. PostgreSQL stores accounts and balances, profiles,
+products, carts, orders, fulfillments, reviews, and wallet transactions. Redis
+currently only participates in `/health`.
+
+## Database changes
+
+Startup creates tables from the models but does not alter existing tables.
+This version adds `fulfillments`, `seller_reviews`, and
+`order_items.fulfillment_id`. Account balances and the `wallet_transactions` ledger
+are also new. Apply schema changes by recreating the database;
+there are no migrations at this stage.
+
+For a fresh local stack, the following deletes **all PostgreSQL and Redis data**,
+including existing accounts and orders:
 
 ```sh
-docker compose up
+docker compose down --volumes
+docker compose up --build
 ```
 
-- Frontend: http://localhost:5173
-- API: http://localhost:8000
-- Swagger UI: http://localhost:8000/docs
-- Health check: http://localhost:8000/health
+## Local development and checks
 
-Compose builds missing images on the first run. Use `docker compose up --build`
-after changing dependencies or a Dockerfile (PyJWT was added for authentication), and add `-d` to run in the background.
-`docker-compose up` also works where the standalone Compose command is installed.
-Set `FRONT_PORT` or `API_PORT` in `.env` to change the published ports.
-
-Both applications reload during development: Python changes under `backend/app/`
-restart Uvicorn, and changes under `front/src/` update through Vite. The frontend's
-`index.html` and `vite.config.js` are also mounted into its container. Polling is
-enabled for frontend file watching in Docker, including on Windows. Frontend
-dependencies stay inside the image; rebuild it after changing `package.json`
-or `package-lock.json`.
-
-The health endpoint checks both PostgreSQL and Redis and returns HTTP 503 if either is unavailable. PostgreSQL and Redis data persist in Docker volumes. The frontend and API ports are published to the host.
-
-The example credentials are for local development. Use a URL-safe password in `.env` because it is included in the database connection URL.
-
-Stop the services:
+Backend: use Python 3.12, install `backend/requirements-dev.txt`, and run commands
+from `backend/`. Supply `DATABASE_URL`, `REDIS_URL`, and security settings in the
+shell, then run `uvicorn app.main:app --reload`.
 
 ```sh
-docker compose down
+python -m pytest
+ruff check .
 ```
 
-## Frontend
+API tests require `TEST_DATABASE_URL` pointing to a disposable PostgreSQL database;
+they drop all its tables before every test. Without it, database tests skip.
+With Compose running, create a test database using
+`docker compose exec postgres createdb -U shop shop_test`; use connection details
+reachable from the environment running pytest. Compose does not publish the
+PostgreSQL port by default.
 
-`front/` contains a minimal React + Vite JavaScript app with a startup screen.
-There are no marketplace pages or client-side routes yet. Its Docker image uses
-Node.js 24.
-
-For future API calls, use relative URLs such as `fetch('/api/products')`.
-Vite removes the `/api` prefix and forwards the request to `http://api:8000`
-inside Compose, so browser requests use the frontend's origin.
-
-To run the frontend outside Docker, use Node.js 20.19+ or 22.12+:
+Frontend: use Node.js 20.19+ or 22.12+ and run from `front/`:
 
 ```sh
-cd front
 npm ci
 npm run dev
+npm run build
 ```
 
-On PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
-The local proxy defaults to `http://localhost:8000`; set `API_PROXY_TARGET`
-in the shell environment if the API runs elsewhere.
+Use `npm.cmd` on PowerShell if needed. Vite forwards `/api` to
+`API_PROXY_TARGET` (default `http://localhost:8000`, Compose `http://api:8000`).
+`npm run preview` also uses the proxy, but exported static files do not; production
+hosting must route `/api` to the backend itself.
 
-`npm run build` generates static assets in `front/dist/`, and `npm run preview`
-serves that build locally. Vite also uses the proxy during local preview. The
-static assets do not include an API proxy; a production deployment will need
-its own API routing.
+GitHub Actions runs Ruff, tests with PostgreSQL/Redis, the frontend build, and
+Docker image builds. Dependabot checks dependency updates weekly.

@@ -33,3 +33,10 @@ class SellerProfileUpdate(BaseModel):
     @classmethod
     def _normalize_email(cls, value: object) -> object:
         return normalize_email(value)
+
+
+class PublicSeller(BaseModel):
+    seller_id: int
+    store_name: str
+    rating: Decimal
+    review_count: int

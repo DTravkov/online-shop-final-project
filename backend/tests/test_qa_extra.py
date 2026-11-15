@@ -12,6 +12,7 @@ import jwt
 import pytest
 from conftest import (
     add_product,
+    deposit,
     login_admin,
     register_customer,
     register_seller,
@@ -276,6 +277,7 @@ def test_tc09_cancelled_order_cannot_be_paid(api):
 def test_tc10_money_calculations_are_exact(api):
     seller = register_seller(api)
     buyer = register_customer(api)
+    deposit(buyer)
     cheap = add_product(seller, name="Sticker", price="0.10", stock=100)
     odd = add_product(seller, name="Cable", price="19.99", stock=100)
 

@@ -1,4 +1,4 @@
-from conftest import add_product, login_admin, register_customer, register_seller
+from conftest import add_product, deposit, login_admin, register_customer, register_seller
 
 
 def _stock(api, product_id: int) -> int:
@@ -9,6 +9,7 @@ def _two_seller_cart(api):
     alpha = register_seller(api, email="alpha@test.local", store_name="Alpha")
     beta = register_seller(api, email="beta@test.local", store_name="Beta")
     buyer = register_customer(api)
+    deposit(buyer)
     phone = add_product(alpha, name="Phone", price="100000.00", stock=5)
     cable = add_product(beta, name="Cable", price="1999.99", stock=10)
     buyer.post("/customer/cart/items", json={"product_id": phone["product_id"], "quantity": 1})
@@ -136,13 +137,18 @@ def test_seller_sees_and_processes_orders_with_own_items(api):
 
     shipped = alpha.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "shipped"})
     assert shipped.status_code == 200 and shipped.json()["order_status"] == "shipped"
-    assert buyer.get(f"/customer/orders/{order['order_id']}").json()["order_status"] == "shipped"
+    assert buyer.get(f"/customer/orders/{order['order_id']}").json()["order_status"] == "partially_shipped"
+    assert beta.get(f"/seller/orders/{order['order_id']}").json()["order_status"] == "new"
     assert buyer.post(f"/customer/orders/{order['order_id']}/cancel").status_code == 400
 
     assert beta.patch(status_url, json={"order_status": "delivered"}).status_code == 200
     back = alpha.patch(f"/seller/orders/{order['order_id']}/status", json={"order_status": "shipped"})
     assert back.status_code == 400
     assert alpha.patch(status_url, json={"order_status": "cancelled"}).status_code == 422
+    assert buyer.get(f"/customer/orders/{order['order_id']}").json()["order_status"] == "partially_delivered"
+    assert alpha.get("/seller/orders", params={"order_status": "delivered"}).json() == []
+    assert alpha.patch(status_url, json={"order_status": "delivered"}).status_code == 200
+    assert buyer.get(f"/customer/orders/{order['order_id']}").json()["order_status"] == "delivered"
     assert [o["order_id"] for o in alpha.get("/seller/orders", params={"order_status": "delivered"}).json()] == [
         order["order_id"]
     ]
@@ -178,6 +184,7 @@ def test_admin_payment_status_control(api):
 def test_admin_analytics(api):
     alpha = register_seller(api, email="alpha@test.local", store_name="Alpha")
     buyer = register_customer(api)
+    deposit(buyer)
     admin = login_admin(api)
     products = [add_product(alpha, name=f"Item {n}", price=f"{n}0.00", stock=100) for n in range(1, 8)]
 
@@ -206,7 +213,9 @@ def test_admin_analytics(api):
     assert summary["products"] == {"total": 7, "active": 7, "out_of_stock": 0}
     assert summary["orders"] == {
         "total": 4,
-        "by_order_status": {"new": 3, "shipped": 0, "delivered": 0, "cancelled": 1},
+        "by_order_status": {
+            "new": 3, "partially_shipped": 0, "shipped": 0, "partially_delivered": 0, "delivered": 0, "cancelled": 1,
+        },
         "by_payment_status": {"pending": 1, "paid": 2, "refunded": 1},
         "items_sold": 18,
         "paid_revenue": "280.00",

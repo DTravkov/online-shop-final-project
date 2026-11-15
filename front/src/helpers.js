@@ -56,7 +56,9 @@ export function getProductVisual(productName) {
 export function getStatusName(status) {
   const names = {
     new: 'Новый',
+    partially_shipped: 'Частично отправлен',
     shipped: 'В пути',
+    partially_delivered: 'Частично доставлен',
     delivered: 'Доставлен',
     cancelled: 'Отменён',
     paid: 'Оплачен',

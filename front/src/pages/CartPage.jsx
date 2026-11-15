@@ -4,10 +4,11 @@ import { getProductVisual } from '../helpers.js'
 import { Button, Icon, PageLoading, PageTitle } from '../components/Common.jsx'
 
 // Корзина покупателя.
-export default function CartPage({ token, onCheckoutComplete, onCartChange, showToast, goToCatalog }) {
+export default function CartPage({ token, onCheckoutComplete, onCartChange, showToast, goToCatalog, goToWallet }) {
   const [cart, setCart] = useState(null)
   const [address, setAddress] = useState('')
   const [payNow, setPayNow] = useState(false)
+  const [balance, setBalance] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -20,6 +21,8 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
     try {
       const cartData = await apiGet('/customer/cart', token)
       const addressData = await apiGet('/customer/delivery-address', token)
+      const wallet = await apiGet('/wallet', token)
+      setBalance(wallet.balance)
 
       setCart(cartData)
 
@@ -217,8 +220,11 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
 
             <label className="check-row">
               <input type="checkbox" checked={payNow} onChange={(event) => setPayNow(event.target.checked)} />
-              <span>Отметить как оплаченное (демо-режим)</span>
+              <span>Оплатить с баланса сейчас</span>
             </label>
+
+            {payNow && balance !== null && Number(balance) < Number(cart.total_amount) ?
+              <p className="checkout-hint">Для оплаты не хватает средств. Пополните баланс или оформите заказ с оплатой позже.</p> : null}
 
             <Button className="full-width" onClick={checkout} disabled={checkoutDisabled}>
               {busy ? 'Оформляем…' : 'Оформить заказ'} <Icon name="arrow" />
@@ -228,7 +234,8 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
               <p className="checkout-hint">Некоторые товары недоступны в указанном количестве. Измените корзину, чтобы продолжить.</p>
             ) : null}
 
-            <p className="checkout-note">Оплата в проекте симулируется. Настоящее списание средств не выполняется.</p>
+            <p className="checkout-note">На балансе: {balance === null ? '…' : formatPrice(balance)}. Если оплатить позже, заказ появится в разделе «Мои заказы».</p>
+            <button className="text-action" onClick={goToWallet}>Пополнить баланс →</button>
           </aside>
         </div>
       )}

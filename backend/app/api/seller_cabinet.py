@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.schemas.order import OrderStatus, OrderStatusUpdate, SellerOrderRead
+from app.schemas.order import FulfillmentStatus, OrderStatusUpdate, SellerOrderRead
 from app.schemas.product import ProductRead, SellerProductCreate, SellerProductUpdate
 from app.schemas.seller import SellerProfileUpdate, SellerRead
 from app.service.auth import SellerAccount
@@ -71,11 +71,11 @@ async def withdraw_product(product_id: int, account: SellerAccount, service: Sto
 async def list_orders(
     account: SellerAccount,
     service: OrderServiceDep,
-    order_status: OrderStatus | None = None,
+    order_status: FulfillmentStatus | None = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
-    """Orders containing this seller's products, newest first."""
+    """Seller fulfillments, newest first. The status filter applies to this seller only."""
     return await service.list_orders(account.seller_id, order_status, offset, limit)
 
 

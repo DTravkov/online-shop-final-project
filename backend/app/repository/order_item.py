@@ -6,12 +6,13 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.exceptions import RecordConflict
+from app.models.fulfillment import Fulfillment
 from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.seller import Seller
@@ -71,11 +72,12 @@ class OrderItemRepository:
         query = (
             select(OrderItem, Product, Seller)
             .join(Product, Product.product_id == OrderItem.product_id)
-            .join(Seller, Seller.seller_id == Product.seller_id)
+            .outerjoin(Fulfillment, Fulfillment.fulfillment_id == OrderItem.fulfillment_id)
+            .join(Seller, Seller.seller_id == func.coalesce(Fulfillment.seller_id, Product.seller_id))
             .where(OrderItem.order_id.in_(order_ids))
         )
         if seller_id is not None:
-            query = query.where(Product.seller_id == seller_id)
+            query = query.where(Seller.seller_id == seller_id)
         result = await self.db.execute(query.order_by(OrderItem.order_item_id))
         return [tuple(row) for row in result.all()]
 

@@ -4,13 +4,15 @@ from fastapi import Depends
 
 from app.exceptions import BusinessRuleViolation, RecordNotFound
 from app.repository.analytics import AnalyticsRepository, get_analytics_repository
+from app.repository.fulfillment import FulfillmentRepository, get_fulfillment_repository
 from app.repository.order import OrderRepository, get_order_repository
 from app.repository.order_item import OrderItemRepository, get_order_item_repository
 from app.schemas.analytics import OrderStats, PlatformSummary, ProductStats, TopProduct, UserStats
 from app.schemas.order import OrderDetail, OrderRead, PaymentStatusUpdate
 from app.service.customer_order import CENT, load_order_details
+from app.service.wallet import WalletService, get_wallet_service
 
-ORDER_STATUSES = ("new", "shipped", "delivered", "cancelled")
+ORDER_STATUSES = ("new", "partially_shipped", "shipped", "partially_delivered", "delivered", "cancelled")
 PAYMENT_STATUSES = ("pending", "paid", "refunded")
 
 # Payment statuses an administrator may set, by current status.
@@ -26,10 +28,14 @@ class AdminService:
         analytics: AnalyticsRepository,
         orders: OrderRepository,
         order_items: OrderItemRepository,
+        fulfillments: FulfillmentRepository,
+        wallet: WalletService,
     ):
         self.analytics = analytics
         self.orders = orders
         self.order_items = order_items
+        self.fulfillments = fulfillments
+        self.wallet = wallet
 
     async def top_products(self, limit: int) -> list[TopProduct]:
         return [TopProduct(**row) for row in await self.analytics.top_products(limit)]
@@ -69,7 +75,7 @@ class AdminService:
         order = await self.orders.get(order_id)
         if order is None:
             raise RecordNotFound("Order", order_id)
-        return (await load_order_details(self.order_items, [order]))[0]
+        return (await load_order_details(self.order_items, self.fulfillments, [order]))[0]
 
     async def update_payment_status(self, order_id: int, data: PaymentStatusUpdate) -> OrderRead:
         async with self.orders.transaction():
@@ -83,6 +89,10 @@ class AdminService:
                 )
             if order.order_status == "cancelled" and data.payment_status == "paid":
                 raise BusinessRuleViolation("A cancelled order cannot be paid.")
+            if data.payment_status == "paid":
+                await self.wallet.charge_order(order)
+            else:
+                await self.wallet.refund_order(order)
             order = await self.orders.update(order, {"payment_status": data.payment_status})
             return OrderRead.model_validate(order)
 
@@ -91,5 +101,7 @@ def get_admin_service(
     analytics: Annotated[AnalyticsRepository, Depends(get_analytics_repository)],
     orders: Annotated[OrderRepository, Depends(get_order_repository)],
     order_items: Annotated[OrderItemRepository, Depends(get_order_item_repository)],
+    fulfillments: Annotated[FulfillmentRepository, Depends(get_fulfillment_repository)],
+    wallet: Annotated[WalletService, Depends(get_wallet_service)],
 ) -> AdminService:
-    return AdminService(analytics, orders, order_items)
+    return AdminService(analytics, orders, order_items, fulfillments, wallet)

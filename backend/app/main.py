@@ -16,7 +16,9 @@ from app.api.order_item import router as order_items_router
 from app.api.product import router as products_router
 from app.api.seller import router as sellers_router
 from app.api.seller_cabinet import router as seller_cabinet_router
+from app.api.shop import router as shop_router
 from app.api.users import router as users_router
+from app.api.wallet import router as wallet_router
 from app.core.config import ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL, REDIS_URL
 from app.core.db import Base, create_engine
 from app.exceptions import (
@@ -50,7 +52,9 @@ app = FastAPI(title="Online Shop API", lifespan=lifespan)
 
 # Marketplace features.
 app.include_router(auth_router)
+app.include_router(wallet_router)
 app.include_router(catalog_router)
+app.include_router(shop_router)
 app.include_router(customer_cabinet_router)
 app.include_router(seller_cabinet_router)
 app.include_router(admin_router)

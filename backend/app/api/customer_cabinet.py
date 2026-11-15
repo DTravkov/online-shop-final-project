@@ -96,7 +96,7 @@ async def get_order(order_id: int, account: CustomerAccount, service: OrderServi
 
 @router.post("/orders/{order_id}/pay", response_model=OrderDetail)
 async def pay_order(order_id: int, account: CustomerAccount, service: OrderServiceDep):
-    """Simulate payment of a pending order."""
+    """Pay a pending order using the customer balance."""
     return await service.pay(account.customer_id, order_id)
 
 

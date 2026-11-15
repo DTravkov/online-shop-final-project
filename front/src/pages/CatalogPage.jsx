@@ -3,7 +3,7 @@ import { getProductVisual } from '../helpers.js'
 import { Button, Icon } from '../components/Common.jsx'
 
 // Одна карточка товара в каталоге.
-function ProductCard({ product, onOpen, onAdd, busy }) {
+export function ProductCard({ product, onOpen, onAdd, busy }) {
   const visual = getProductVisual(product.product_name)
 
   let storeName = 'Магазин'
@@ -34,7 +34,7 @@ function ProductCard({ product, onOpen, onAdd, busy }) {
 
       <div className="product-info">
         <div className="product-store">
-          {storeName}
+          <a className="shop-link" href={`#/shops/${product.seller_id}`}>{storeName}</a>
           <span> · ★ {rating.toFixed(1)}</span>
         </div>
 
@@ -110,7 +110,7 @@ export function ProductModal({ product, onClose, onAdd, busy }) {
         <div className="detail-content">
           <p className="eyebrow">КАРТОЧКА ТОВАРА</p>
           <h2>{product.product_name}</h2>
-          <p className="detail-seller">{product.store_name} · ★ {rating.toFixed(1)}</p>
+          <p className="detail-seller"><a className="shop-link" href={`#/shops/${product.seller_id}`} onClick={onClose}>{product.store_name}</a> · ★ {rating.toFixed(1)}</p>
           <p className="detail-stock">{stockText}</p>
           <div className="detail-price">{formatPrice(product.price)}</div>
 
@@ -133,7 +133,7 @@ export function ProductModal({ product, onClose, onAdd, busy }) {
                 return (
                 <div className="offer-row" key={offer.product_id}>
                   <div>
-                    <strong>{offer.store_name}</strong>
+                    <a className="shop-link" href={`#/shops/${offer.seller_id}`} onClick={onClose}>{offer.store_name}</a>
                     <small>★ {Number(offer.seller_rating).toFixed(1)} · {offer.stock_quantity} шт.</small>
                   </div>
                   <b>{formatPrice(offer.price)}</b>

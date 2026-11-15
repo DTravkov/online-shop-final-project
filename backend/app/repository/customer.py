@@ -33,6 +33,9 @@ class CustomerRepository:
     async def get(self, customer_id: int) -> Customer | None:
         return await self.db.get(Customer, customer_id)
 
+    async def get_for_update(self, customer_id: int) -> Customer | None:
+        return await self.db.get(Customer, customer_id, with_for_update=True)
+
     async def create(self, values: dict[str, Any]) -> Customer:
         record = Customer(**values)
         self.db.add(record)

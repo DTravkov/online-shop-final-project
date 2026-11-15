@@ -95,7 +95,8 @@ export function formatPrice(price) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'KZT',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(number)
 }
 

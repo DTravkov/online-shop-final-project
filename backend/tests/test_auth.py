@@ -20,6 +20,7 @@ def test_customer_registration_login_and_me(api):
         "account_id": buyer.account_id,
         "email": "buyer@test.local",
         "role": "customer",
+        "balance": "0.00",
         "customer_id": buyer.customer_id,
         "seller_id": None,
     }

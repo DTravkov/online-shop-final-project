@@ -117,3 +117,9 @@ def add_product(seller: Actor, name="Phone", price="100.00", stock=10) -> dict:
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def deposit(actor: Actor, amount="1000000.00") -> dict:
+    response = actor.post("/wallet/deposit", json={"amount": amount})
+    assert response.status_code == 200, response.text
+    return response.json()

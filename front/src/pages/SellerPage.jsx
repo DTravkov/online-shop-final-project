@@ -265,6 +265,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
 
       {error ? <div className="inline-error">{error}</div> : null}
 
+      {profile && <a className="shop-back" href={`#/shops/${profile.seller_id}`}>Открыть публичную страницу магазина →</a>}
       <div className="workspace-tabs">
         <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Мои товары <span>{products.length}</span></button>
         <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>Заказы <span>{orders.length}</span></button>
@@ -323,7 +324,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
           )}
         </div>
       ) : (
-        <div className="seller-order-section">
+        <div className="seller-order-section"><p className="fulfillment-note">Статус относится только к товарам вашего магазина.</p>
           {orders.length === 0 ? (
             <div className="empty-state"><h3>Заказов пока нет</h3><p>Новые заказы покупателей появятся здесь.</p></div>
           ) : null}

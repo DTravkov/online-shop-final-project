@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -53,6 +54,7 @@ class AccountRead(BaseModel):
     account_id: int
     email: str
     role: Role
+    balance: Decimal
     customer_id: int | None
     seller_id: int | None
 

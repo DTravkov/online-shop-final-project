@@ -33,6 +33,9 @@ class SellerRepository:
     async def get(self, seller_id: int) -> Seller | None:
         return await self.db.get(Seller, seller_id)
 
+    async def get_for_update(self, seller_id: int) -> Seller | None:
+        return await self.db.get(Seller, seller_id, with_for_update=True)
+
     async def create(self, values: dict[str, Any]) -> Seller:
         record = Seller(**values)
         self.db.add(record)

@@ -6,15 +6,14 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from fastapi import Depends
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.exceptions import RecordConflict
+from app.models.fulfillment import Fulfillment
 from app.models.order import Order
-from app.models.order_item import OrderItem
-from app.models.product import Product
 
 
 class OrderRepository:
@@ -77,28 +76,17 @@ class OrderRepository:
         result = await self.db.scalars(query.order_by(Order.order_id.desc()).offset(offset).limit(limit))
         return list(result.all())
 
-    def _has_seller_items(self, seller_id: int):
-        return exists().where(
-            OrderItem.order_id == Order.order_id,
-            OrderItem.product_id == Product.product_id,
-            Product.seller_id == seller_id,
-        )
-
     async def list_for_seller(
         self, seller_id: int, order_status: str | None, offset: int, limit: int
     ) -> list[Order]:
-        query = select(Order).where(self._has_seller_items(seller_id))
+        query = select(Order).join(Fulfillment, Fulfillment.order_id == Order.order_id).where(
+            Fulfillment.seller_id == seller_id,
+        )
         if order_status is not None:
-            query = query.where(Order.order_status == order_status)
+            query = query.where(Fulfillment.status == order_status)
         result = await self.db.scalars(query.order_by(Order.order_id.desc()).offset(offset).limit(limit))
         return list(result.all())
 
-    async def contains_seller_items(self, order_id: int, seller_id: int) -> bool:
-        return bool(
-            await self.db.scalar(
-                select(Order.order_id).where(Order.order_id == order_id, self._has_seller_items(seller_id))
-            )
-        )
 
 
 def get_order_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> OrderRepository:

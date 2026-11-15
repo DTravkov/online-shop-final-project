@@ -4,7 +4,7 @@ import { getProductVisual } from '../helpers.js'
 import { Button, Icon, PageLoading, PageTitle, Status } from '../components/Common.jsx'
 
 // История покупок или заказы продавца.
-export default function OrdersPage({ token, role, showToast }) {
+export default function OrdersPage({ token, role, showToast, onBalanceChanged }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyOrder, setBusyOrder] = useState(null)
@@ -42,6 +42,7 @@ export default function OrdersPage({ token, role, showToast }) {
     try {
       await apiPost('/customer/orders/' + orderId + '/' + action, {}, token)
       await loadOrders()
+      onBalanceChanged()
 
       if (action === 'pay') {
         showToast('Заказ оплачен')
@@ -147,6 +148,20 @@ export default function OrdersPage({ token, role, showToast }) {
                 </div>
               ) : null}
 
+              {role === 'customer' && order.fulfillments?.length > 0 ? (
+                <div className="fulfillment-list">
+                  {order.fulfillments.map((fulfillment) => (
+                    <div className="fulfillment-row" key={fulfillment.fulfillment_id}>
+                      <a className="shop-link" href={`#/shops/${fulfillment.seller_id}`}>{fulfillment.store_name}</a>
+                      <Status value={fulfillment.status} />
+                      {fulfillment.status === 'delivered' && order.payment_status === 'paid' ?
+                        <a className="review-link" href={`#/shops/${fulfillment.seller_id}`}>Оставить отзыв →</a> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {role === 'seller' ? <p className="fulfillment-note">Вы управляете доставкой только своих товаров.</p> : null}
+
               <div className="order-product-list">
                 {order.items.map((item) => {
                   const visual = getProductVisual(item.product_name)
@@ -156,7 +171,7 @@ export default function OrdersPage({ token, role, showToast }) {
                       <div className={'order-product-icon ' + visual.className}>{visual.icon}</div>
                       <div>
                         <strong>{item.product_name}</strong>
-                        <small>{item.store_name} · {item.quantity} шт. × {formatPrice(item.unit_price)}</small>
+                        <small><a className="shop-link" href={`#/shops/${item.seller_id}`}>{item.store_name}</a> · {item.quantity} шт. × {formatPrice(item.unit_price)}</small>
                       </div>
                       <b>{formatPrice(item.subtotal)}</b>
                     </div>
