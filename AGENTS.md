@@ -143,7 +143,9 @@ Session data and JWTs live in localStorage and are passed to `api.js` explicitly
 Use relative `/api/...` URLs. Vite strips `/api` and proxies to `API_PROXY_TARGET`
 (default `http://localhost:8000`, Compose `http://api:8000`). The server listens
 on `0.0.0.0:5173` with a strict port; `USE_POLLING=true` helps Docker file watching.
-Preview uses the same proxy; production static hosting needs its own API routing.
+Vercel Services routes `/api` and its descendants to FastAPI using the root
+`vercel.json`. On Vercel the backend uses the `/api` root path, while Compose
+uses the unprefixed backend paths behind Vite's local proxy.
 Preserve npm and the lockfile; rebuild images after dependency changes.
 
 ## Running and checking changes
