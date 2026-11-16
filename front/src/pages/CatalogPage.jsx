@@ -1,11 +1,9 @@
 import { formatPrice } from '../api.js'
-import { getProductVisual } from '../helpers.js'
 import { Button, Icon } from '../components/Common.jsx'
+import ProductImageCarousel from '../components/ProductImageCarousel.jsx'
 
 // Одна карточка товара в каталоге.
 export function ProductCard({ product, onOpen, onAdd, busy }) {
-  const visual = getProductVisual(product.product_name)
-
   let storeName = 'Магазин'
   if (product.store_name) {
     storeName = product.store_name
@@ -26,11 +24,10 @@ export function ProductCard({ product, onOpen, onAdd, busy }) {
 
   return (
     <article className="product-card">
-      <button className={'product-visual ' + visual.className} onClick={onOpen} aria-label={'Подробнее: ' + product.product_name}>
-        <span className="visual-tag">{visual.tag}</span>
-        <span className="visual-symbol">{visual.icon}</span>
+      <div className="product-visual-wrap">
+        <ProductImageCarousel product={product} onImageClick={onOpen} />
         <span className="visual-id">№{String(product.product_id).padStart(3, '0')}</span>
-      </button>
+      </div>
 
       <div className="product-info">
         <div className="product-store">
@@ -62,8 +59,6 @@ export function ProductModal({ product, onClose, onAdd, busy }) {
   if (!product) {
     return null
   }
-
-  const visual = getProductVisual(product.product_name)
 
   let rating = 0
   if (product.seller_rating) {
@@ -101,9 +96,8 @@ export function ProductModal({ product, onClose, onAdd, busy }) {
       <section className="product-modal modal-panel">
         <button className="modal-close" onClick={onClose} aria-label="Закрыть"><Icon name="close" /></button>
 
-        <div className={'detail-visual ' + visual.className}>
-          <span className="visual-tag">{visual.tag}</span>
-          <span className="visual-symbol">{visual.icon}</span>
+        <div className="detail-visual-wrap">
+          <ProductImageCarousel product={product} size="large" />
           <span className="visual-id">№{String(product.product_id).padStart(3, '0')}</span>
         </div>
 
