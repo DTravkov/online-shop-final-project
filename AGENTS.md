@@ -145,6 +145,10 @@ Session data and JWTs live in localStorage and are passed to `api.js` explicitly
 Customers and sellers link or unlink Telegram from their profile. Linking
 requires a code received in a private bot chat. PostgreSQL enforces unique chat
 IDs across accounts. Order transactions enqueue notifications for linked accounts.
+Queued notifications store a snapshot of the destination chat ID, with no link
+foreign key. Unlinking stops future order notifications but preserves queued jobs,
+including the unlink confirmation. Delivery and retries stay ordered per chat ID,
+even if that chat is later linked again.
 The bot holds the Telegram API token and communicates with FastAPI over HTTP.
 
 Use relative `/api/...` URLs. Vite strips `/api` and proxies to `API_PROXY_TARGET`

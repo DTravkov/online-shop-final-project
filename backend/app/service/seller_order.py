@@ -46,7 +46,7 @@ class SellerOrderService:
         self.order_items = order_items
         self.customers = customers
         self.fulfillments = fulfillments
-        self.telegram = telegram
+        self.tg_repo = telegram
 
     async def _to_read(self, seller_id: int, orders: list[Order]) -> list[SellerOrderRead]:
         items_by_order: dict[int, list[OrderItemDetail]] = defaultdict(list)
@@ -109,7 +109,7 @@ class SellerOrderService:
             new_status = overall_status(statuses)
             if order.order_status != new_status:
                 order = await self.orders.update(order, {"order_status": new_status})
-                await self.telegram.enqueue(
+                await self.tg_repo.enqueue(
                     order.order_id, new_status, datetime.now(UTC), customer_id=order.customer_id,
                 )
             return (await self._to_read(seller_id, [order]))[0]

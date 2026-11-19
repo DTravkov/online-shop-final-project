@@ -41,7 +41,7 @@ class TelegramService:
     def __init__(
         self, links: TelegramRepository, accounts: AccountRepository, redis: Redis, settings: TelegramSettings | None,
     ):
-        self.links = links
+        self.tg_repo = links
         self.accounts = accounts
         self.redis = redis
         self.settings = settings
@@ -56,15 +56,15 @@ class TelegramService:
             raise PermissionDenied("Account role has changed. Sign in again.")
 
     async def status(self, account_id: int) -> TelegramStatus:
-        linked = await self.links.for_account(account_id) is not None
+        linked = await self.tg_repo.for_account(account_id) is not None
         return TelegramStatus(enabled=self.settings is not None, linked=linked)
 
     async def start(self, account: CurrentAccount, settings: TelegramSettings) -> str:
         reference = token_bytes(16)
         key = attempt_key(reference)
-        async with self.links.transaction():
+        async with self.tg_repo.transaction():
             await self._lock_account(account.account_id, account.role)
-            if await self.links.for_account(account.account_id):
+            if await self.tg_repo.for_account(account.account_id):
                 raise RecordConflict("Disconnect the current Telegram chat before linking another one.")
             attempt = LinkAttempt(
                 account_id=account.account_id,
@@ -92,7 +92,7 @@ class TelegramService:
         if attempt is None:
             raise BusinessRuleViolation(EXPIRED_LINK)
 
-        async with self.links.transaction():
+        async with self.tg_repo.transaction():
             # All transitions for an account share this lock, including requests handled by other API instances.
             await self._lock_account(attempt.account_id, attempt.role)
             if await self.redis.get(active_key(attempt.account_id)) != key.encode():
@@ -100,7 +100,7 @@ class TelegramService:
             attempt = await self._read_attempt(key)
             if attempt is None or attempt.chat_id is not None:
                 raise BusinessRuleViolation(EXPIRED_LINK)
-            if await self.links.for_chat(chat_id):
+            if await self.tg_repo.for_chat(chat_id):
                 raise RecordConflict("This Telegram chat is already linked to another marketplace account.")
             code = token_hex(6)
             attempt.chat_id = chat_id
@@ -110,9 +110,9 @@ class TelegramService:
         return code
 
     async def confirm(self, account: CurrentAccount, code: str) -> None:
-        async with self.links.transaction():
+        async with self.tg_repo.transaction():
             await self._lock_account(account.account_id, account.role)
-            if await self.links.for_account(account.account_id):
+            if await self.tg_repo.for_account(account.account_id):
                 raise RecordConflict("Your marketplace account already has a Telegram link.")
             key = await self.redis.get(active_key(account.account_id))
             attempt = await self._read_attempt(key) if key else None
@@ -125,31 +125,38 @@ class TelegramService:
             if not await self.redis.getdel(key):
                 raise BusinessRuleViolation(EXPIRED_LINK)
             await self.redis.delete(active_key(account.account_id))
-            await self.links.create_link(account.account_id, attempt.chat_id)
+            await self.tg_repo.create_link(account.account_id, attempt.chat_id)
+            await self.tg_repo.enqueue(
+                -1, "link_success", datetime.now(UTC), customer_id=account.customer_id,
+                seller_ids=(account.seller_id,) if account.seller_id is not None else (),
+            )
 
     async def unlink(self, account: CurrentAccount) -> None:
-        async with self.links.transaction():
+        async with self.tg_repo.transaction():
             await self._lock_account(account.account_id, account.role)
             key = await self.redis.getdel(active_key(account.account_id))
             if key:
                 await self.redis.delete(key)
-            if link := await self.links.for_account(account.account_id):
-                await self.links.delete_link(link)
+            if link := await self.tg_repo.for_account(account.account_id):
+                await self.tg_repo.enqueue(
+                    -1, "unlink_success", datetime.now(UTC), customer_id=account.customer_id,
+                    seller_ids=(account.seller_id,) if account.seller_id is not None else (),
+                )
+                await self.tg_repo.delete_link(link)
 
     async def claim(self) -> TelegramJob | None:
-        async with self.links.transaction():
-            claimed = await self.links.claim(datetime.now(UTC))
-            if claimed is None:
+        async with self.tg_repo.transaction():
+            job = await self.tg_repo.claim(datetime.now(UTC))
+            if job is None:
                 return None
-            job, chat_id = claimed
             return TelegramJob(
-                notification_id=job.notification_id, chat_id=str(chat_id), lease_id=job.lease_id,
+                notification_id=job.notification_id, chat_id=str(job.chat_id), lease_id=job.lease_id,
                 order_id=job.order_id, event=job.event,
             )
 
     async def report(self, notification_id: int, result: TelegramDeliveryResult) -> None:
-        async with self.links.transaction():
-            await self.links.report(notification_id, result, datetime.now(UTC))
+        async with self.tg_repo.transaction():
+            await self.tg_repo.report(notification_id, result, datetime.now(UTC))
 
     async def _read_attempt(self, key: str | bytes) -> LinkAttempt | None:
         value = await self.redis.get(key)

@@ -72,11 +72,15 @@ def _confirm(actor, code):
     return actor.post(f"{LINK_PATH}/confirm", json={"code": code})
 
 
-def _link(api, actor, chat_id):
+def _link(api, actor, chat_id, *, acknowledge=True):
     response = _redeem(api, _start(actor), chat_id)
     assert response.status_code == 200, response.text
     confirmed = _confirm(actor, response.json()["code"])
     assert confirmed.status_code == 204, confirmed.text
+    if acknowledge:
+        job = _claim(api)
+        assert (job["event"], job["chat_id"]) == ("link_success", str(chat_id))
+        _report(api, job)
 
 
 def _claim(api):
@@ -186,6 +190,9 @@ def test_checkout_and_customer_status_notifications(telegram_api):
 
     deposit(buyer)
     assert buyer.post(f"/customer/orders/{order_id}/pay").status_code == 200
+    job = _claim(api)
+    assert (job["event"], job["chat_id"], job["order_id"]) == ("paid", "10001", order_id)
+    _report(api, job)
     assert _claim(api) is None
     for seller, status, expected in zip(
         [sellers[0], sellers[1], sellers[2], *sellers],
@@ -204,10 +211,78 @@ def test_checkout_and_customer_status_notifications(telegram_api):
     cancelled_id = buyer.post("/customer/orders").json()["order_id"]
     assert buyer.post(f"/customer/orders/{cancelled_id}/cancel").status_code == 200
     assert sellers[0].delete(LINK_PATH).status_code == 204
-    _link(api, sellers[0], 10005)
+    job = _claim(api)
+    assert (job["event"], job["chat_id"], job["order_id"]) == ("seller_new_order", "10002", cancelled_id)
+    _report(api, job)
     job = _claim(api)
     assert (job["event"], job["chat_id"], job["order_id"]) == ("cancelled", "10001", cancelled_id)
     _report(api, job)
+    job = _claim(api)
+    assert (job["event"], job["chat_id"]) == ("unlink_success", "10002")
+    _report(api, job)
+    _link(api, sellers[0], 10005)
+    assert _claim(api) is None
+
+
+@pytest.mark.parametrize("role", ["customer", "seller"])
+def test_queued_notifications_keep_the_original_chat_after_unlink_and_relink(telegram_api, role):
+    api = telegram_api
+    buyer = register_customer(api)
+    seller = register_seller(api)
+    actor = buyer if role == "customer" else seller
+    old_chat_id = 4503599627370495
+    _link(api, actor, old_chat_id)
+    product = add_product(seller)
+
+    def place_and_ship():
+        assert buyer.post("/customer/cart/items", json={"product_id": product["product_id"]}).status_code == 200
+        placed = buyer.post("/customer/orders")
+        assert placed.status_code == 201, placed.text
+        order_id = placed.json()["order_id"]
+        assert seller.patch(f"/seller/orders/{order_id}/status", json={"order_status": "shipped"}).status_code == 200
+        return order_id
+
+    original_order_id = place_and_ship()
+    assert actor.delete(LINK_PATH).status_code == 204
+    assert actor.delete(LINK_PATH).status_code == 204
+    assert actor.get(LINK_PATH).json()["linked"] is False
+    place_and_ship()  # Unlinked accounts must not receive new order notifications.
+    _link(api, actor, 10002, acknowledge=False)
+
+    job = _claim(api)
+    expected_event = "shipped" if role == "customer" else "seller_new_order"
+    assert (job["event"], job["chat_id"], job["order_id"]) == (
+        expected_event, str(old_chat_id), original_order_id,
+    )
+    _report(api, job)
+    job = _claim(api)
+    assert (job["event"], job["chat_id"]) == ("unlink_success", str(old_chat_id))
+    _report(api, job)
+    job = _claim(api)
+    assert (job["event"], job["chat_id"]) == ("link_success", "10002")
+    _report(api, job)
+    assert _claim(api) is None
+
+
+def test_chat_order_and_active_leases_survive_link_replacement(telegram_api):
+    api = telegram_api
+    buyer = register_customer(api)
+    seller = register_seller(api)
+    _link(api, seller, 10001)
+    product = add_product(seller)
+    assert buyer.post("/customer/cart/items", json={"product_id": product["product_id"]}).status_code == 200
+    assert buyer.post("/customer/orders").status_code == 201
+    active_job = _claim(api)
+    assert active_job["event"] == "seller_new_order"
+
+    assert seller.delete(LINK_PATH).status_code == 204
+    _link(api, buyer, 10001, acknowledge=False)
+    assert _claim(api) is None  # The same chat stays blocked until the earlier lease finishes.
+    _report(api, active_job)
+    for expected_event in ("unlink_success", "link_success"):
+        job = _claim(api)
+        assert (job["event"], job["chat_id"]) == (expected_event, "10001")
+        _report(api, job)
     assert _claim(api) is None
 
 

@@ -18,11 +18,11 @@ class TelegramLink(Base):
 class TelegramNotification(Base):
     __tablename__ = "telegram_notifications"
     __table_args__ = (
-        Index("ix_telegram_pending_link", "link_id", "notification_id", postgresql_where=text("finished_at IS NULL")),
+        Index("ix_telegram_pending_chat", "chat_id", "notification_id", postgresql_where=text("finished_at IS NULL")),
     )
 
     notification_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    link_id: Mapped[UUID] = mapped_column(ForeignKey("telegram_links.link_id", ondelete="CASCADE"))
+    chat_id: Mapped[int] = mapped_column(BigInteger)
     order_id: Mapped[int]
     event: Mapped[str] = mapped_column(String(32))
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

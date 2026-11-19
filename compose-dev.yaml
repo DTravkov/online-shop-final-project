@@ -1,0 +1,91 @@
+services:
+  front:
+    build: ./front
+    ports:
+      - "${FRONT_PORT:-5173}:5173"
+    environment:
+      API_PROXY_TARGET: http://api:8000
+      USE_POLLING: "true"
+    depends_on:
+      - api
+    volumes:
+      - ./front/src:/app/src
+      - ./front/index.html:/app/index.html
+      - ./front/vite.config.js:/app/vite.config.js
+
+  api:
+    build: ./backend
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-shop}:${POSTGRES_PASSWORD:-shop}@postgres:5432/${POSTGRES_DB:-shop}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@shop.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_START_KEY: ${TELEGRAM_START_KEY:-}
+      TELEGRAM_BOT_KEY: ${TELEGRAM_BOT_KEY:-}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/app
+      - --reload-delay
+      - "0.25"
+    volumes:
+      - ./backend/app:/app/app
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shop}
+      POSTGRES_DB: ${POSTGRES_DB:-shop}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  telegram-bot:
+    profiles: [telegram]
+    build: ./telegram-bot
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BACKEND_URL: http://api:8000
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_KEY: ${TELEGRAM_BOT_KEY:-}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-}
+    depends_on:
+      - api
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:

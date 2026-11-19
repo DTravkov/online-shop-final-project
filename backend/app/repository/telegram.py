@@ -51,36 +51,35 @@ class TelegramRepository:
         customer_id: int | None = None, seller_ids: Sequence[int] = (),
     ) -> None:
         recipient = Account.customer_id == customer_id if customer_id is not None else Account.seller_id.in_(seller_ids)
-        # Keep the link present until the job is inserted. Concurrent unlink then deletes the job by cascade.
-        links = await self.db.scalars(
-            select(TelegramLink.link_id).join(Account).where(recipient)
+        # Snapshot the destination while the link is locked against concurrent unlinking.
+        chat_ids = await self.db.scalars(
+            select(TelegramLink.chat_id).join(Account).where(recipient)
             .order_by(TelegramLink.link_id).with_for_update(read=True, key_share=True, of=TelegramLink)
         )
         self.db.add_all([
-            TelegramNotification(link_id=link_id, order_id=order_id, event=event, available_at=now)
-            for link_id in links
+            TelegramNotification(chat_id=chat_id, order_id=order_id, event=event, available_at=now)
+            for chat_id in chat_ids
         ])
         await self.db.flush()
 
-    async def claim(self, now: datetime) -> tuple[TelegramNotification, int] | None:
+    async def claim(self, now: datetime) -> TelegramNotification | None:
         earlier = aliased(TelegramNotification)
         # Keep messages in order per chat, while allowing other chats to proceed during a retry.
         has_earlier_job = select(earlier.notification_id).where(
-            earlier.link_id == TelegramNotification.link_id,
+            earlier.chat_id == TelegramNotification.chat_id,
             earlier.notification_id < TelegramNotification.notification_id,
             earlier.finished_at.is_(None),
         ).exists()
         statement = (
-            select(TelegramNotification, TelegramLink.chat_id).join(TelegramLink)
+            select(TelegramNotification)
             .where(
                 TelegramNotification.finished_at.is_(None), TelegramNotification.available_at <= now, ~has_earlier_job,
             ).order_by(TelegramNotification.notification_id).limit(1)
             .with_for_update(of=TelegramNotification, skip_locked=True)
         )
-        row = (await self.db.execute(statement)).one_or_none()
-        if row is None:
+        job = await self.db.scalar(statement)
+        if job is None:
             return None
-        job, chat_id = row
         if job.attempts >= MAX_ATTEMPTS:
             job.finished_at = now
             job.outcome = "failed"
@@ -90,7 +89,7 @@ class TelegramRepository:
         job.available_at = now + timedelta(seconds=LEASE_SECONDS)
         job.attempts += 1
         await self.db.flush()
-        return job, chat_id
+        return job
 
     async def report(self, notification_id: int, result: TelegramDeliveryResult, now: datetime) -> None:
         job = await self.db.scalar(
@@ -101,7 +100,7 @@ class TelegramRepository:
             ).with_for_update()
         )
         if job is None:
-            return  # The link was removed, or this lease is no longer current.
+            return  # The job has finished, or this lease is no longer current.
         job.lease_id = None
         if result.outcome == "retry" and job.attempts < MAX_ATTEMPTS:
             delay = max(result.retry_after, min(10 * 2 ** (job.attempts - 1), 600))

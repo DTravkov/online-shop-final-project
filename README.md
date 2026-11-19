@@ -99,7 +99,11 @@ port. FastAPI creates the Telegram tables on startup in the existing database.
 From a customer or seller profile, choose **Подключить Telegram**, open the bot
 and press **Start**, then enter its confirmation code in the same website
 profile. Each link expires after five minutes and can be redeemed once. Select
-**Отключить Telegram** to disconnect and drop queued messages for that link.
+**Отключить Telegram** to stop new order notifications. Messages already queued,
+including the unlink confirmation, remain deliverable to their original chat.
+Each notification stores the chat ID at enqueue time, independently of the
+account link. Relinking does not redirect old messages to the new chat, and
+delivery and retries remain ordered per chat even across link changes.
 
 Sellers get one message per new order containing their products, including
 orders awaiting payment. Customers get a message when the overall delivery
@@ -249,6 +253,10 @@ This version adds `fulfillments`, `seller_reviews`, and
 `order_items.fulfillment_id`. Account balances and the `wallet_transactions` ledger
 are also new. Apply schema changes by recreating the database;
 there are no migrations at this stage.
+
+`telegram_notifications` now stores a `BigInteger` `chat_id` snapshot instead of
+the `link_id` foreign key. Existing tables require recreation before running
+this version; startup does not convert the old notification schema.
 
 For a fresh local stack, the following deletes **all PostgreSQL and Redis data**,
 including existing accounts and orders:

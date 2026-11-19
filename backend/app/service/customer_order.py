@@ -149,6 +149,7 @@ class CustomerOrderService:
                 raise BusinessRuleViolation(f"Order payment is already {order.payment_status}.")
             await self.wallet.charge_order(order)
             order = await self.orders.update(order, {"payment_status": "paid"})
+            await self.telegram.enqueue(order.order_id, "paid", datetime.now(UTC), customer_id=customer_id)
             return (await load_order_details(self.order_items, self.fulfillments, [order]))[0]
 
     async def cancel(self, customer_id: int, order_id: int) -> OrderDetail:

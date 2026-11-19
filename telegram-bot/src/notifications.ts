@@ -6,10 +6,14 @@ const statuses = new Map([
   ['partially_delivered', 'частично доставлен'],
   ['delivered', 'доставлен'],
   ['cancelled', 'отменён'],
+  ['payment_success', 'отменён'],
 ])
 
 export function notificationText(job: Job): string {
   if (job.event === 'seller_new_order') return `Mint Market · Новый заказ №${job.order_id}.`
+  if (job.event === 'link_success') return `Mint Market · Ваш аккаунт успешно привязан! Уведомления о заказах будут приходить в этот чат.`
+  if (job.event === 'unlink_success') return `Mint Market · Ваш аккаунт был отвязан. Уведомления о заказах более не будут приходить в этот чат.`
+  if (job.event === 'paid') return `Mint Market · Заказ №${job.order_id} оплачен.`
   const status = statuses.get(job.event)
   if (!status) throw new ApiError(400)
   return `Mint Market · Заказ №${job.order_id} ${status}.`
