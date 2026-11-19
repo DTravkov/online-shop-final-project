@@ -7,8 +7,9 @@ Customers browse shops, buy products, track deliveries, and review sellers.
 Sellers manage their listings and fulfill their own part of each order.
 Administrators use protected APIs for table management, payments, and analytics.
 Payments use internal balances with free testing deposits; no bank is connected.
-PostgreSQL stores application data; Redis only supports
-health checks. Keep improvements outside the requested scope as proposals.
+PostgreSQL stores application data and the Telegram outbox. Redis supports
+health checks and short-lived Telegram linking attempts. Keep improvements outside
+the requested scope as proposals.
 
 ## Where things live
 
@@ -35,13 +36,15 @@ front/
     helpers.js    Product visuals and translated statuses
     index.css     Shared styles
   package.json, package-lock.json, vite.config.js, Dockerfile
+telegram-bot/    Standalone TypeScript bot, package files, tests, and Dockerfile
 compose.yaml, .env.example, README.md
 .github/          CI and dependency updates
 ```
 
-Backend and frontend are separate Docker build contexts. Keep shared setup and
-documentation at the root. Run Python commands from `backend/`, npm commands
-from `front/`, and Compose commands from the root. The backend package remains
+Backend, frontend, and the Telegram bot are separate Docker build contexts.
+Keep shared setup and documentation at the root. Run Python commands from
+`backend/`, npm commands from the corresponding package directory, and Compose
+commands from the root. The backend package remains
 `app`, with entry point `app.main:app`. Keep the existing singular `service`
 and `repository` names and resource-specific classes.
 
@@ -139,6 +142,10 @@ Use React hooks and props; there is no routing/state library or StrictMode wrapp
 Navigation uses URL hashes; public shop links are `#/shops/{seller_id}` and work
 on refresh and browser back/forward. Keep customer and seller workflows separate.
 Session data and JWTs live in localStorage and are passed to `api.js` explicitly.
+Customers and sellers link or unlink Telegram from their profile. Linking
+requires a code received in a private bot chat. PostgreSQL enforces unique chat
+IDs across accounts. Order transactions enqueue notifications for linked accounts.
+The bot holds the Telegram API token and communicates with FastAPI over HTTP.
 
 Use relative `/api/...` URLs. Vite strips `/api` and proxies to `API_PROXY_TARGET`
 (default `http://localhost:8000`, Compose `http://api:8000`). The server listens
@@ -171,7 +178,9 @@ the fixture drops all tables before each test. Without it, database tests skip.
 
 Frontend checks: `npm ci`, then `npm run build`; `npm run dev` starts development.
 Local Node must be 20.19+ or 22.12+. Use `npm.cmd` on PowerShell when needed.
-CI runs Ruff, PostgreSQL tests, frontend build, and Docker image builds.
+Bot checks run `npm ci` and `npm test` from `telegram-bot/`. Set `TEST_REDIS_URL`
+alongside `TEST_DATABASE_URL` to run the Telegram integration tests.
+CI runs Ruff, PostgreSQL and Redis tests, frontend build, bot checks, and Docker image builds.
 
 Before changing a resource, read its corresponding layers and tests. Keep changes
 focused, preserve unrelated contracts, and update README for user-facing behavior.

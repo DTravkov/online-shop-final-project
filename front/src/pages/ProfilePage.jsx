@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiGet, apiPatch, apiPut, getErrorMessage } from '../api.js'
 import { Button, Field, Icon, PageLoading, PageTitle } from '../components/Common.jsx'
+import TelegramSettings from '../components/TelegramSettings.jsx'
 
 // Страница изменения личного профиля.
 export default function ProfilePage({ token, role, showToast }) {
@@ -177,6 +178,7 @@ export default function ProfilePage({ token, role, showToast }) {
               </Button>
             </div>
           </form>
+          <TelegramSettings key={token} token={token} />
         </div>
       ) : null}
     </section>

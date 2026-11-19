@@ -18,6 +18,7 @@ from app.api.product import router as products_router
 from app.api.seller import router as sellers_router
 from app.api.seller_cabinet import router as seller_cabinet_router
 from app.api.shop import router as shop_router
+from app.api.telegram_user import router as telegram_router
 from app.api.users import router as users_router
 from app.api.wallet import router as wallet_router
 from app.core.config import (
@@ -30,6 +31,7 @@ from app.core.config import (
     REDIS_URL,
 )
 from app.core.db import Base, create_engine
+from app.core.telegram import TelegramSettings
 from app.exceptions import (
     AuthenticationFailed,
     BusinessRuleViolation,
@@ -43,6 +45,7 @@ from app.service.auth import ensure_admin_account, require_admin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.telegram = TelegramSettings.from_env()
     if ON_VERCEL:
         if not getenv("DATABASE_URL") or not getenv("REDIS_URL"):
             raise RuntimeError("Set DATABASE_URL and REDIS_URL in the Vercel environment.")
@@ -78,6 +81,7 @@ app.include_router(shop_router)
 app.include_router(customer_cabinet_router)
 app.include_router(seller_cabinet_router)
 app.include_router(admin_router)
+app.include_router(telegram_router)
 
 # Raw table CRUD bypasses the business rules, so only administrators may use it.
 admin_only = [Depends(require_admin)]

@@ -23,6 +23,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-production}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@shop.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_START_KEY: ${TELEGRAM_START_KEY:-}
+      TELEGRAM_BOT_KEY: ${TELEGRAM_BOT_KEY:-}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,6 +60,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  telegram-bot:
+    profiles: [telegram]
+    build: ./telegram-bot
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BACKEND_URL: http://api:8000
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_KEY: ${TELEGRAM_BOT_KEY:-}
+      TELEGRAM_SERVICE_TOKEN: ${TELEGRAM_SERVICE_TOKEN:-}
+    depends_on:
+      - api
 
   redis:
     image: redis:7-alpine

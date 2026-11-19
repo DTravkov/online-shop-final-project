@@ -12,6 +12,7 @@ its own delivery, and buyers can review a shop after receiving a paid purchase.
 - A persistent cart, checkout, order history, balance payments, and cancellation.
 - Personal balances, free test deposits, seller revenue, and transaction history.
 - Seller product management and independent delivery status for each shop.
+- Optional Telegram alerts for new seller orders and customer order status changes.
 - Administrator APIs for payments, analytics, and direct table management.
 
 The interface is in Russian, with prices displayed in tenge (KZT). Product visuals
@@ -69,6 +70,41 @@ databases and secrets for production and preview deployments.
 
 After deployment, open `/` for the storefront, `/api/docs` for Swagger, and
 `/api/health` to check PostgreSQL and Redis connectivity.
+
+## Telegram notifications
+
+Create a bot in [BotFather](https://t.me/BotFather), then set the Telegram values
+from `.env.example`. Use a separate bot and secrets for each environment.
+Generate three independent Base64URL values by running this command three times
+for `TELEGRAM_START_KEY`, `TELEGRAM_BOT_KEY`, and `TELEGRAM_SERVICE_TOKEN`.
+
+```sh
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+| Variable | Service | Value |
+| --- | --- | --- |
+| `TELEGRAM_BOT_USERNAME` | FastAPI | Bot username without `@`. Leave empty to disable the integration. |
+| `TELEGRAM_START_KEY` | FastAPI | Secret that encrypts the short reference in each website link. |
+| `TELEGRAM_BOT_KEY` | FastAPI and bot | Shared encryption key for private-chat redemption requests. |
+| `TELEGRAM_SERVICE_TOKEN` | FastAPI and bot | Shared bearer credential for bot-only API requests. |
+| `TELEGRAM_BOT_TOKEN` | Bot | Bot API token from BotFather. |
+| `TELEGRAM_BACKEND_URL` | Bot | FastAPI base URL. Compose sets `http://api:8000`. For Vercel use `https://YOUR_DOMAIN/api`. |
+
+Start the stack with `docker compose --profile telegram up --build`. For Vercel,
+deploy the `telegram-bot/` Docker image as one always-on replica and configure
+its environment separately. The bot uses outbound HTTPS and needs no inbound
+port. FastAPI creates the Telegram tables on startup in the existing database.
+
+From a customer or seller profile, choose **Подключить Telegram**, open the bot
+and press **Start**, then enter its confirmation code in the same website
+profile. Each link expires after five minutes and can be redeemed once. Select
+**Отключить Telegram** to disconnect and drop queued messages for that link.
+
+Sellers get one message per new order containing their products, including
+orders awaiting payment. Customers get a message when the overall delivery
+status changes, including partial progress and cancellation. FastAPI commits
+jobs with the order change and the bot retries temporary delivery failures.
 
 ## Using the marketplace
 

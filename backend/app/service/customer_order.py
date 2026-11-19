@@ -13,6 +13,7 @@ from app.repository.fulfillment import FulfillmentRepository, get_fulfillment_re
 from app.repository.order import OrderRepository, get_order_repository
 from app.repository.order_item import OrderItemRepository, get_order_item_repository
 from app.repository.product import ProductRepository, get_product_repository
+from app.repository.telegram import TelegramRepository, get_telegram_repository
 from app.schemas.order import CheckoutRequest, FulfillmentRead, OrderDetail, OrderItemDetail, OrderRead
 from app.service.cart import check_stock
 from app.service.wallet import WalletService, get_wallet_service
@@ -55,6 +56,7 @@ class CustomerOrderService:
         customers: CustomerRepository,
         fulfillments: FulfillmentRepository,
         wallet: WalletService,
+        telegram: TelegramRepository,
     ):
         self.orders = orders
         self.order_items = order_items
@@ -63,6 +65,7 @@ class CustomerOrderService:
         self.customers = customers
         self.fulfillments = fulfillments
         self.wallet = wallet
+        self.telegram = telegram
 
     async def checkout(self, customer_id: int, data: CheckoutRequest) -> OrderDetail:
         """Turn the cart into one order: snapshot prices, reserve stock, empty the cart."""
@@ -112,6 +115,7 @@ class CustomerOrderService:
                 await self.wallet.charge_order(order)
                 order = await self.orders.update(order, {"payment_status": "paid"})
             await self.cart.clear(customer_id)
+            await self.telegram.enqueue(order.order_id, "seller_new_order", datetime.now(UTC), seller_ids=list(groups))
             return (await load_order_details(self.order_items, self.fulfillments, [order]))[0]
 
     async def list_orders(
@@ -166,6 +170,7 @@ class CustomerOrderService:
                 await self.wallet.refund_order(order)
                 values["payment_status"] = "refunded"
             order = await self.orders.update(order, values)
+            await self.telegram.enqueue(order.order_id, "cancelled", datetime.now(UTC), customer_id=customer_id)
             return (await load_order_details(self.order_items, self.fulfillments, [order]))[0]
 
 
@@ -177,5 +182,6 @@ def get_customer_order_service(
     customers: Annotated[CustomerRepository, Depends(get_customer_repository)],
     fulfillments: Annotated[FulfillmentRepository, Depends(get_fulfillment_repository)],
     wallet: Annotated[WalletService, Depends(get_wallet_service)],
+    telegram: Annotated[TelegramRepository, Depends(get_telegram_repository)],
 ) -> CustomerOrderService:
-    return CustomerOrderService(orders, order_items, cart, products, customers, fulfillments, wallet)
+    return CustomerOrderService(orders, order_items, cart, products, customers, fulfillments, wallet, telegram)

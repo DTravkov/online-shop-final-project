@@ -301,6 +301,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .profile-form { padding: 0 20px 20px; }
 .profile-form .panel-heading { margin: 0 -20px 20px; }
 .profile-form > .field { margin-bottom: 15px; }
+.profile-telegram { grid-column: -2 / -1; }
+.profile-telegram form .field { margin: 15px 0; }
+.profile-telegram-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .profile-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 19px; padding-top: 16px; border-top: 1px solid #edf0ea; }
 .profile-form-footer p { margin: 0; color: #9da59b; font-size: 9px; }
 

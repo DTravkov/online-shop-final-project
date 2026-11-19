@@ -7,10 +7,11 @@ from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_review import SellerReview
+from app.models.telegram import TelegramLink, TelegramNotification
 from app.models.user import User
 from app.models.wallet_transaction import WalletTransaction
 
 __all__ = [
     "Account", "CartItem", "Customer", "Fulfillment", "Order", "OrderItem", "Product", "Seller", "SellerReview",
-    "User", "WalletTransaction",
+    "TelegramLink", "TelegramNotification", "User", "WalletTransaction",
 ]

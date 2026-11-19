@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -10,6 +11,7 @@ from app.repository.customer import CustomerRepository, get_customer_repository
 from app.repository.fulfillment import FulfillmentRepository, get_fulfillment_repository
 from app.repository.order import OrderRepository, get_order_repository
 from app.repository.order_item import OrderItemRepository, get_order_item_repository
+from app.repository.telegram import TelegramRepository, get_telegram_repository
 from app.schemas.order import OrderItemDetail, OrderStatusUpdate, SellerOrderRead
 
 # Statuses a seller may move an order to, by current status.
@@ -38,11 +40,13 @@ class SellerOrderService:
         order_items: OrderItemRepository,
         customers: CustomerRepository,
         fulfillments: FulfillmentRepository,
+        telegram: TelegramRepository,
     ):
         self.orders = orders
         self.order_items = order_items
         self.customers = customers
         self.fulfillments = fulfillments
+        self.telegram = telegram
 
     async def _to_read(self, seller_id: int, orders: list[Order]) -> list[SellerOrderRead]:
         items_by_order: dict[int, list[OrderItemDetail]] = defaultdict(list)
@@ -102,7 +106,12 @@ class SellerOrderService:
                 raise BusinessRuleViolation("A cancelled order cannot be fulfilled.")
             await self.fulfillments.set_status(fulfillment, data.order_status)
             statuses = [record.status for record, _seller in await self.fulfillments.list_for_orders([order_id])]
-            order = await self.orders.update(order, {"order_status": overall_status(statuses)})
+            new_status = overall_status(statuses)
+            if order.order_status != new_status:
+                order = await self.orders.update(order, {"order_status": new_status})
+                await self.telegram.enqueue(
+                    order.order_id, new_status, datetime.now(UTC), customer_id=order.customer_id,
+                )
             return (await self._to_read(seller_id, [order]))[0]
 
 
@@ -111,5 +120,6 @@ def get_seller_order_service(
     order_items: Annotated[OrderItemRepository, Depends(get_order_item_repository)],
     customers: Annotated[CustomerRepository, Depends(get_customer_repository)],
     fulfillments: Annotated[FulfillmentRepository, Depends(get_fulfillment_repository)],
+    telegram: Annotated[TelegramRepository, Depends(get_telegram_repository)],
 ) -> SellerOrderService:
-    return SellerOrderService(orders, order_items, customers, fulfillments)
+    return SellerOrderService(orders, order_items, customers, fulfillments, telegram)
