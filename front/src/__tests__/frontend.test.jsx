@@ -76,10 +76,10 @@ const emptyCart = { items: [], total_quantity: 0, total_amount: '0.00', can_chec
 // ---------------------------------------------------------------------------
 describe('FT-01 helpers', () => {
   it('formats prices, dates, statuses and product icons', () => {
-    // Цена в тенге, без копеек, с разделителем тысяч
+    // Цена в тенге, с копейками (2 знака) и разделителем тысяч
     // (знак валюты зависит от Node/браузера: ₸ или KZT, поэтому принимаем оба)
-    expect(formatPrice('15000').replace(/\s/g, ' ')).toMatch(/^15 000 (₸|KZT)$/)
-    expect(formatPrice('1234.56').replace(/\s/g, ' ')).toMatch(/^1 235 (₸|KZT)$/)
+    expect(formatPrice('15000').replace(/\s/g, ' ')).toMatch(/^15 000,00 (₸|KZT)$/)
+    expect(formatPrice('1234.56').replace(/\s/g, ' ')).toMatch(/^1 234,56 (₸|KZT)$/)
 
     // Пустая дата не ломает страницу
     expect(formatDate(null)).toBe('—')
@@ -165,7 +165,7 @@ describe('FT-04 catalog page', () => {
 
     expect(await screen.findByText('Беспроводные наушники')).toBeInTheDocument()
     expect(screen.getByText('Кружка')).toBeInTheDocument()
-    expect(screen.getByText(/^15 000 (₸|KZT)$/)).toBeInTheDocument()
+    expect(screen.getByText(/^15 000,00 (₸|KZT)$/)).toBeInTheDocument()
     expect(screen.getByText('В наличии · 5 шт.')).toBeInTheDocument()
     expect(screen.getByText('Нет в наличии')).toBeInTheDocument()
 
@@ -351,6 +351,7 @@ describe('FT-09 cart page', () => {
     const fetchMock = mockApi({
       'GET /customer/cart': cartWith(2),
       'GET /customer/delivery-address': { delivery_address: '' },
+      'GET /wallet': { balance: '50000.00' },
       'PUT /customer/cart/items/1': cartWith(1),
       'POST /customer/orders': { order_id: 42 },
     })
@@ -358,7 +359,7 @@ describe('FT-09 cart page', () => {
 
     render(
       <CartPage token="t" onCheckoutComplete={onCheckoutComplete} onCartChange={vi.fn()}
-        showToast={vi.fn()} goToCatalog={vi.fn()} />,
+        showToast={vi.fn()} goToCatalog={vi.fn()} goToWallet={vi.fn()} />,
     )
     await screen.findByText('Наушники')
 
@@ -377,9 +378,9 @@ describe('FT-09 cart page', () => {
     expect(screen.getByRole('button', { name: '+' })).toBeEnabled()
     expect(calls(fetchMock).find((c) => c.method === 'PUT').body).toEqual({ quantity: 1 })
 
-    // Вводим адрес, отмечаем "оплачено", оформляем
+    // Вводим адрес, отмечаем "оплатить с баланса", оформляем
     await user.type(screen.getByPlaceholderText('Укажите адрес доставки'), '  Almaty, Abay 1 ')
-    await user.click(screen.getByLabelText(/Отметить как оплаченное/))
+    await user.click(screen.getByLabelText(/Оплатить с баланса сейчас/))
     expect(checkout).toBeEnabled()
     await user.click(checkout)
 
@@ -413,8 +414,9 @@ describe('FT-10 orders page', () => {
       'POST /customer/orders/1/pay': { order_id: 1 },
     })
     const showToast = vi.fn()
+    const onBalanceChanged = vi.fn()
 
-    render(<OrdersPage token="t" role="customer" showToast={showToast} />)
+    render(<OrdersPage token="t" role="customer" showToast={showToast} onBalanceChanged={onBalanceChanged} />)
     await screen.findByText('ЗАКАЗ №1')
 
     const card = (id) => screen.getByText(`ЗАКАЗ №${id}`).closest('article')
@@ -434,6 +436,7 @@ describe('FT-10 orders page', () => {
     // Клик "Оплатить": POST на нужный адрес, список перезагружается, есть уведомление
     await user.click(within(card(1)).getByRole('button', { name: 'Оплатить' }))
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Заказ оплачен'))
+    expect(onBalanceChanged).toHaveBeenCalled() // после оплаты баланс обновляется
 
     const all = calls(fetchMock)
     expect(all.some((c) => c.method === 'POST' && c.path === '/customer/orders/1/pay')).toBe(true)
