@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { apiGet, apiPost, apiPatch, formatDate, formatPrice, getErrorMessage } from '../api.js'
 import { getProductVisual } from '../helpers.js'
@@ -33,17 +34,17 @@ function ProductForm({ product, onClose, onSave, busy }) {
 
   return (
     <ModalFrame onClose={onClose}>
-      <p className="eyebrow">КАТАЛОГ МАГАЗИНА</p>
-      <h2>{product ? 'Редактировать товар' : 'Новый товар'}</h2>
+      <p className="eyebrow">{t('КАТАЛОГ МАГАЗИНА')}</p>
+      <h2>{product ? t('Редактировать товар') : t('Новый товар')}</h2>
 
       <form className="form-stack" onSubmit={submit}>
-        <Field label="Название товара" value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} placeholder="Например, Настольная лампа" />
-        <Field label="Цена, ₸" type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} required />
-        <Field label="Количество на складе" type="number" min="0" step="1" value={stock} onChange={(event) => setStock(event.target.value)} required />
+        <Field label={t('Название товара')} value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} placeholder={t('Например, Настольная лампа')} />
+        <Field label={t('Цена, ₸')} type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} required />
+        <Field label={t('Количество на складе')} type="number" min="0" step="1" value={stock} onChange={(event) => setStock(event.target.value)} required />
 
         <div className="modal-actions">
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
-          <Button type="submit" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить товар'}</Button>
+          <Button variant="outline" onClick={onClose}>{t('Отмена')}</Button>
+          <Button type="submit" disabled={busy}>{busy ? t('Сохраняем…') : t('Сохранить товар')}</Button>
         </div>
       </form>
     </ModalFrame>
@@ -68,18 +69,18 @@ function StoreProfileForm({ profile, onClose, onSave, busy }) {
 
   return (
     <ModalFrame onClose={onClose}>
-      <p className="eyebrow">НАСТРОЙКИ</p>
-      <h2>Профиль магазина</h2>
+      <p className="eyebrow">{t('НАСТРОЙКИ')}</p>
+      <h2>{t('Профиль магазина')}</h2>
 
       <form className="form-stack" onSubmit={submit}>
-        <Field label="Название магазина" value={storeName} onChange={(event) => setStoreName(event.target.value)} required maxLength={100} />
-        <Field label="Электронная почта" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={100} />
-        <Field label="Телефон" value={phone} onChange={(event) => setPhone(event.target.value)} required maxLength={20} />
-        <p className="form-hint">Рейтинг магазина рассчитывается системой и не редактируется вручную.</p>
+        <Field label={t('Название магазина')} value={storeName} onChange={(event) => setStoreName(event.target.value)} required maxLength={100} />
+        <Field label={t('Электронная почта')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={100} />
+        <Field label={t('Телефон')} value={phone} onChange={(event) => setPhone(event.target.value)} required maxLength={20} />
+        <p className="form-hint">{t('Рейтинг магазина рассчитывается системой и не редактируется вручную.')}</p>
 
         <div className="modal-actions">
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
-          <Button type="submit" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</Button>
+          <Button variant="outline" onClick={onClose}>{t('Отмена')}</Button>
+          <Button type="submit" disabled={busy}>{busy ? t('Сохраняем…') : t('Сохранить')}</Button>
         </div>
       </form>
     </ModalFrame>
@@ -151,9 +152,9 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
       setModalType('')
 
       if (selectedProduct) {
-        showToast('Товар обновлён')
+        showToast(t('Товар обновлён'))
       } else {
-        showToast('Товар добавлен в магазин')
+        showToast(t('Товар добавлен в магазин'))
       }
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -176,9 +177,9 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
       onCatalogChanged()
 
       if (product.is_active) {
-        showToast('Товар снят с продажи')
+        showToast(t('Товар снят с продажи'))
       } else {
-        showToast('Товар снова опубликован')
+        showToast(t('Товар снова опубликован'))
       }
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -196,7 +197,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
       const updatedProfile = await apiPatch('/seller/profile', profileData, token)
       setProfile(updatedProfile)
       setModalType('')
-      showToast('Профиль магазина сохранён')
+      showToast(t('Профиль магазина сохранён'))
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     }
@@ -215,7 +216,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
       }, token)
 
       await loadSellerData()
-      showToast('Статус заказа обновлён')
+      showToast(t('Статус заказа обновлён'))
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     }
@@ -224,7 +225,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
   }
 
   if (loading) {
-    return <PageLoading label="Открываем кабинет продавца…" />
+    return <PageLoading label={t("Открываем кабинет продавца…")} />
   }
 
   let activeCount = 0
@@ -234,7 +235,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
     }
   }
 
-  let storeName = 'Мой магазин'
+  let storeName = t('Мой магазин')
   let rating = 0
 
   if (profile) {
@@ -246,47 +247,47 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
     <section className="workspace-page seller-workspace">
       <div className="seller-banner">
         <div>
-          <p className="eyebrow">ПРОСТРАНСТВО ПРОДАВЦА</p>
+          <p className="eyebrow">{t('ПРОСТРАНСТВО ПРОДАВЦА')}</p>
           <h1>{storeName}<span>.</span></h1>
-          <p>Ваш магазин — ваши правила. Управляйте товарами и заказами в одном месте.</p>
+          <p>{t('Ваш магазин — ваши правила. Управляйте товарами и заказами в одном месте.')}</p>
         </div>
         <button className="seller-profile-button" onClick={() => setModalType('profile')}>
-          <Icon name="edit" /> Настроить магазин
+          <Icon name="edit" /> {t("Настроить магазин")}
         </button>
         <div className="seller-banner-mark">m.</div>
       </div>
 
       <div className="seller-stats">
-        <div className="stat-card"><span>Всего товаров</span><strong>{products.length}</strong><small>В каталоге магазина</small></div>
-        <div className="stat-card"><span>Активные товары</span><strong>{activeCount}</strong><small>Доступны покупателям</small></div>
-        <div className="stat-card"><span>Заказы</span><strong>{orders.length}</strong><small>В последних записях</small></div>
-        <div className="stat-card"><span>Рейтинг</span><strong>★ {rating}</strong><small>Оценка покупателей</small></div>
+        <div className="stat-card"><span>{t('Всего товаров')}</span><strong>{products.length}</strong><small>{t('В каталоге магазина')}</small></div>
+        <div className="stat-card"><span>{t('Активные товары')}</span><strong>{activeCount}</strong><small>{t('Доступны покупателям')}</small></div>
+        <div className="stat-card"><span>{t('Заказы')}</span><strong>{orders.length}</strong><small>{t('В последних записях')}</small></div>
+        <div className="stat-card"><span>{t('Рейтинг')}</span><strong>★ {rating}</strong><small>{t('Оценка покупателей')}</small></div>
       </div>
 
       {error ? <div className="inline-error">{error}</div> : null}
 
-      {profile && <a className="shop-back" href={`#/shops/${profile.seller_id}`}>Открыть публичную страницу магазина →</a>}
+      {profile && <a className="shop-back" href={`#/shops/${profile.seller_id}`}>{t('Открыть публичную страницу магазина →')}</a>}
       <div className="workspace-tabs">
-        <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Мои товары <span>{products.length}</span></button>
-        <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>Заказы <span>{orders.length}</span></button>
+        <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>{t('Мои товары')} <span>{products.length}</span></button>
+        <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>{t('Заказы')} <span>{orders.length}</span></button>
       </div>
 
       {tab === 'products' ? (
         <div className="seller-product-section">
           <div className="section-heading compact-heading">
             <div>
-              <h2>Каталог магазина<span>.</span></h2>
-              <p className="section-subtitle">Добавляйте товары, меняйте цену и остатки.</p>
+              <h2>{t('Каталог магазина')}<span>.</span></h2>
+              <p className="section-subtitle">{t('Добавляйте товары, меняйте цену и остатки.')}</p>
             </div>
-            <Button onClick={addNewProduct}><Icon name="plus" /> Добавить товар</Button>
+            <Button onClick={addNewProduct}><Icon name="plus" /> {t("Добавить товар")}</Button>
           </div>
 
           {products.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon"><Icon name="box" /></div>
-              <h3>Здесь пока пусто</h3>
-              <p>Добавьте первый товар, чтобы начать продавать.</p>
-              <Button onClick={addNewProduct}>Добавить товар <Icon name="plus" /></Button>
+              <h3>{t('Здесь пока пусто')}</h3>
+              <p>{t('Добавьте первый товар, чтобы начать продавать.')}</p>
+              <Button onClick={addNewProduct}>{t('Добавить товар')} <Icon name="plus" /></Button>
             </div>
           ) : (
             <div className="seller-product-list">
@@ -294,12 +295,12 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
                 const visual = getProductVisual(product.product_name)
                 let rowClass = 'seller-product-row panel-card'
                 let statusClass = 'status status-good'
-                let statusText = 'Активен'
+                let statusText = t('Активен')
 
                 if (!product.is_active) {
                   rowClass = rowClass + ' inactive-row'
                   statusClass = 'status status-muted'
-                  statusText = 'Снят с продажи'
+                  statusText = t('Снят с продажи')
                 }
 
                 return (
@@ -307,14 +308,14 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
                     <div className={'seller-product-thumb ' + visual.className}>{visual.icon}</div>
                     <div className="seller-product-main">
                       <strong>{product.product_name}</strong>
-                      <span>Артикул #{product.product_id} · {product.stock_quantity} шт. на складе</span>
+                      <span>{t("Артикул")} #{product.product_id} · {product.stock_quantity} {t("шт.")} {t("на складе")}</span>
                     </div>
                     <div className="seller-product-price">{formatPrice(product.price)}</div>
                     <span className={statusClass}>{statusText}</span>
                     <div className="seller-product-actions">
-                      <button className="icon-action" onClick={() => editProduct(product)} title="Редактировать"><Icon name="edit" /></button>
+                      <button className="icon-action" onClick={() => editProduct(product)} title={t('Редактировать')}><Icon name="edit" /></button>
                       <button className="text-action" onClick={() => changeProductStatus(product)} disabled={busy}>
-                        {product.is_active ? 'Снять с продажи' : 'Опубликовать'}
+                        {product.is_active ? t('Снять с продажи') : t('Опубликовать')}
                       </button>
                     </div>
                   </div>
@@ -324,16 +325,16 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
           )}
         </div>
       ) : (
-        <div className="seller-order-section"><p className="fulfillment-note">Статус относится только к товарам вашего магазина.</p>
+        <div className="seller-order-section"><p className="fulfillment-note">{t('Статус относится только к товарам вашего магазина.')}</p>
           {orders.length === 0 ? (
-            <div className="empty-state"><h3>Заказов пока нет</h3><p>Новые заказы покупателей появятся здесь.</p></div>
+            <div className="empty-state"><h3>{t('Заказов пока нет')}</h3><p>{t('Новые заказы покупателей появятся здесь.')}</p></div>
           ) : null}
 
           {orders.map((order) => (
             <article className="order-card panel-card" key={order.order_id}>
               <div className="order-top">
                 <div>
-                  <p className="eyebrow">ЗАКАЗ №{order.order_id}</p>
+                  <p className="eyebrow">{t("ЗАКАЗ №")}{order.order_id}</p>
                   <span className="order-date">{formatDate(order.order_date)} · {order.customer_name}</span>
                 </div>
                 <div className="order-statuses"><Status value={order.order_status} /><Status value={order.payment_status} /></div>
@@ -348,7 +349,7 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
                       <div className={'order-product-icon ' + visual.className}>{visual.icon}</div>
                       <div>
                         <strong>{item.product_name}</strong>
-                        <small>{item.quantity} шт. × {formatPrice(item.unit_price)}</small>
+                        <small>{item.quantity} {t("шт.")} × {formatPrice(item.unit_price)}</small>
                       </div>
                       <b>{formatPrice(item.subtotal)}</b>
                     </div>
@@ -357,16 +358,16 @@ export default function SellerPage({ token, onCatalogChanged, showToast }) {
               </div>
 
               <div className="order-bottom">
-                <div><span>К выплате за товары</span><strong>{formatPrice(order.seller_total)}</strong></div>
+                <div><span>{t('К выплате за товары')}</span><strong>{formatPrice(order.seller_total)}</strong></div>
                 <div className="order-actions">
                   {order.order_status === 'new' ? (
-                    <Button variant="soft" onClick={() => changeOrderStatus(order.order_id, 'shipped')} disabled={busy}>Отправить</Button>
+                    <Button variant="soft" onClick={() => changeOrderStatus(order.order_id, 'shipped')} disabled={busy}>{t('Отправить')}</Button>
                   ) : null}
                   {order.order_status === 'new' ? (
-                    <Button variant="outline" onClick={() => changeOrderStatus(order.order_id, 'delivered')} disabled={busy}>Доставлен</Button>
+                    <Button variant="outline" onClick={() => changeOrderStatus(order.order_id, 'delivered')} disabled={busy}>{t('Доставлен')}</Button>
                   ) : null}
                   {order.order_status === 'shipped' ? (
-                    <Button variant="outline" onClick={() => changeOrderStatus(order.order_id, 'delivered')} disabled={busy}>Доставлен</Button>
+                    <Button variant="outline" onClick={() => changeOrderStatus(order.order_id, 'delivered')} disabled={busy}>{t('Доставлен')}</Button>
                   ) : null}
                 </div>
               </div>

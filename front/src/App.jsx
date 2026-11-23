@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { apiGet, apiPost, formatPrice, getErrorMessage } from './api.js'
 import { Button, Icon } from './components/Common.jsx'
 import AuthModal from './pages/AuthModal.jsx'
-import CatalogPage, { ProductModal } from './pages/CatalogPage.jsx'
+import CatalogPage from './pages/CatalogPage.jsx'
 import CartPage from './pages/CartPage.jsx'
 import OrdersPage from './pages/OrdersPage.jsx'
 import SellerPage from './pages/SellerPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import ShopPage from './pages/ShopPage.jsx'
 import WalletPage from './pages/WalletPage.jsx'
+import ProductPage from './pages/ProductPage.jsx'
+import { getLanguage, setLanguage, t } from './i18n.js'
 
 const SESSION_KEY = 'mint-market-session'
 
@@ -37,10 +39,12 @@ function saveSession(session) {
 }
 
 function readLocation() {
+  const productMatch = window.location.hash.match(/^#\/products\/([1-9]\d*)$/)
+  if (productMatch) return { page: 'product', productId: Number(productMatch[1]), sellerId: null }
   const match = window.location.hash.match(/^#\/shops\/([1-9]\d*)$/)
-  if (match) return { page: 'shop', sellerId: Number(match[1]) }
+  if (match) return { page: 'shop', sellerId: Number(match[1]), productId: null }
   const page = window.location.hash.slice(1)
-  return { page: ['cart', 'orders', 'seller', 'profile', 'wallet'].includes(page) ? page : 'catalog', sellerId: null }
+  return { page: ['cart', 'orders', 'seller', 'profile', 'wallet'].includes(page) ? page : 'catalog', sellerId: null, productId: null }
 }
 
 let toastTimer = null
@@ -50,6 +54,8 @@ export default function App() {
   const [session, setSession] = useState(readSession)
   const [page, setPage] = useState(() => readLocation().page)
   const [shopId, setShopId] = useState(() => readLocation().sellerId)
+  const [productId, setProductId] = useState(() => readLocation().productId)
+  const [language, setLanguageState] = useState(getLanguage)
 
   const [authOpen, setAuthOpen] = useState(false)
   const [authNextPage, setAuthNextPage] = useState('catalog')
@@ -63,7 +69,6 @@ export default function App() {
   const [sort, setSort] = useState('id')
   const [inStock, setInStock] = useState(false)
 
-  const [selectedProduct, setSelectedProduct] = useState(null)
   const [busyProduct, setBusyProduct] = useState(null)
   const [cartCount, setCartCount] = useState(0)
   const [balance, setBalance] = useState(null)
@@ -79,7 +84,7 @@ export default function App() {
       const location = readLocation()
       setPage(location.page)
       setShopId(location.sellerId)
-      setSelectedProduct(null)
+      setProductId(location.productId)
     }
     window.addEventListener('hashchange', followLocation)
     window.addEventListener('popstate', followLocation)
@@ -88,6 +93,12 @@ export default function App() {
       window.removeEventListener('popstate', followLocation)
     }
   }, [])
+
+  // Изменить язык интерфейса.
+  function changeLanguage(nextLanguage) {
+    setLanguage(nextLanguage)
+    setLanguageState(nextLanguage)
+  }
 
   // Показать короткое сообщение пользователю.
   function showToast(message) {
@@ -218,7 +229,7 @@ export default function App() {
     // Корзина доступна только покупателю.
     if (nextPage === 'cart') {
       if (role !== 'customer') {
-        showToast('Корзина доступна в аккаунте покупателя')
+        showToast(t('Корзина доступна в аккаунте покупателя'))
         return
       }
     }
@@ -226,7 +237,7 @@ export default function App() {
     // Кабинет магазина доступен только продавцу.
     if (nextPage === 'seller') {
       if (role !== 'seller') {
-        showToast('Этот раздел доступен продавцам')
+        showToast(t('Этот раздел доступен продавцам'))
         return
       }
     }
@@ -235,7 +246,7 @@ export default function App() {
     if (nextPage === 'orders') {
       if (role !== 'seller') {
         if (role !== 'customer') {
-          showToast('Для просмотра заказов войдите как покупатель или продавец')
+          showToast(t('Для просмотра заказов войдите как покупатель или продавец'))
           return
         }
       }
@@ -252,25 +263,29 @@ export default function App() {
     saveSession(authData)
     setAuthOpen(false)
     setPage(authNextPage)
-    if (authNextPage !== 'shop') window.history.pushState(null, '', '#' + authNextPage)
+    if (authNextPage === 'product' && productId) {
+      window.history.pushState(null, '', '#/products/' + productId)
+    } else if (authNextPage !== 'shop') {
+      window.history.pushState(null, '', '#' + authNextPage)
+    }
 
     if (authData.role === 'seller') {
-      showToast('Добро пожаловать в кабинет продавца')
+      showToast(t('Добро пожаловать в кабинет продавца'))
     } else {
-      showToast('Вы успешно вошли')
+      showToast(t('Вы успешно вошли'))
     }
   }
 
   // Добавить товар в корзину покупателя.
   async function addToCart(productId) {
     if (!session) {
-      openAuth(page === 'shop' ? 'shop' : 'catalog')
-      showToast('Войдите или зарегистрируйтесь, чтобы добавить товар')
+      openAuth(page === 'shop' ? 'shop' : page === 'product' ? 'product' : 'catalog')
+      showToast(t('Войдите или зарегистрируйтесь, чтобы добавить товар'))
       return
     }
 
     if (role !== 'customer') {
-      showToast('Добавлять товары в корзину может аккаунт покупателя')
+      showToast(t('Добавлять товары в корзину может аккаунт покупателя'))
       return
     }
 
@@ -283,8 +298,7 @@ export default function App() {
       }, session.access_token)
 
       setCartCount(cart.total_quantity)
-      showToast('Товар добавлен в корзину')
-      setSelectedProduct(null)
+      showToast(t('Товар добавлен в корзину'))
     } catch (requestError) {
       showToast(getErrorMessage(requestError))
     }
@@ -293,13 +307,11 @@ export default function App() {
   }
 
   // Открыть подробную карточку товара.
-  async function openProduct(productId) {
-    try {
-      const product = await apiGet('/catalog/products/' + productId)
-      setSelectedProduct(product)
-    } catch (requestError) {
-      showToast(getErrorMessage(requestError))
-    }
+  async function openProduct(nextProductId) {
+    setProductId(nextProductId)
+    setPage('product')
+    window.history.pushState(null, '', '#/products/' + nextProductId)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   // Действия после оформления заказа.
@@ -309,7 +321,7 @@ export default function App() {
     window.history.pushState(null, '', '#orders')
     setCartCount(0)
     loadCatalog()
-    showToast('Заказ №' + order.order_id + ' успешно оформлен')
+    showToast(t('Заказ №') + order.order_id + ' ' + t('успешно оформлен'))
   }
 
   // Выйти из аккаунта.
@@ -319,39 +331,39 @@ export default function App() {
     setPage('catalog')
     window.history.pushState(null, '', '#catalog')
     setCartCount(0)
-    showToast('Вы вышли из аккаунта')
+    showToast(t('Вы вышли из аккаунта'))
   }
 
   // Показываем разные пункты меню для разных ролей.
   let navItems = [
-    { id: 'catalog', label: 'Каталог' },
+    { id: 'catalog', label: t('Каталог') },
   ]
 
   if (role === 'customer') {
-    navItems.push({ id: 'cart', label: 'Корзина', count: cartCount })
-    navItems.push({ id: 'orders', label: 'Мои заказы' })
+    navItems.push({ id: 'cart', label: t('Корзина'), count: cartCount })
+    navItems.push({ id: 'orders', label: t('Мои заказы') })
   }
 
   if (role === 'seller') {
-    navItems.push({ id: 'seller', label: 'Мой магазин' })
-    navItems.push({ id: 'orders', label: 'Заказы' })
+    navItems.push({ id: 'seller', label: t('Мой магазин') })
+    navItems.push({ id: 'orders', label: t('Заказы') })
   }
 
-  if (session) navItems.push({ id: 'wallet', label: 'Баланс' })
+  if (session) navItems.push({ id: 'wallet', label: t('Баланс') })
 
   return (
     <div className="app-shell">
       <div className="announcement">
-        <span>Место для уникальных находок</span>
+        <span>{t('Место для уникальных находок')}</span>
         <span className="announcement-dot" />
-        <span>Поддерживайте независимые магазины</span>
+        <span>{t('Поддерживайте независимые магазины')}</span>
       </div>
 
       <header className="site-header">
         <div className="header-main">
           <button className="brand" onClick={() => navigate('catalog')}>
             <span className="brand-mark">m</span>
-            <span>mint<span className="brand-light">market</span><small>ПЛОЩАДКА ХОРОШИХ НАХОДОК</small></span>
+            <span>mint<span className="brand-light">market</span><small>{t("Площадка хороших находок")}</small></span>
           </button>
 
           <form className="header-search" onSubmit={(event) => {
@@ -360,26 +372,34 @@ export default function App() {
             navigate('catalog')
           }}>
             <Icon name="search" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти что-то особенное…" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Найти что-то особенное…")} />
             <kbd>↵</kbd>
           </form>
 
           <div className="header-actions">
+            <label className="language-picker" aria-label={t('Язык')}>
+              <span>{t('Язык')}</span>
+              <select value={language} onChange={(event) => changeLanguage(event.target.value)}>
+                <option value="ru">RU</option>
+                <option value="en">EN</option>
+                <option value="kk">ҚАЗ</option>
+              </select>
+            </label>
             {session ? (
               <>
                 <button className="header-user" onClick={() => navigate(role === 'admin' ? 'wallet' : 'profile')}>
                   <span className="user-avatar">{role === 'seller' ? 'S' : 'M'}</span>
                   <span>
-                    <small>Вы вошли как</small>
-                    <strong>{role === 'seller' ? 'Продавец' : role === 'admin' ? 'Администратор' : 'Покупатель'}</strong>
+                    <small>{t("Вы вошли как")}</small>
+                    <strong>{role === 'seller' ? t('Продавец') : role === 'admin' ? t('Администратор') : t('Покупатель')}</strong>
                   </span>
                 </button>
-                <button className="header-icon-button" onClick={logout} title="Выйти"><Icon name="logout" /></button>
+                <button className="header-icon-button" onClick={logout} title={t("Выйти")}><Icon name="logout" /></button>
               </>
             ) : (
               <>
-                <button className="login-link" onClick={() => openAuth(page === 'shop' ? 'shop' : 'catalog')}>Войти</button>
-                <Button onClick={() => openAuth(page === 'shop' ? 'shop' : 'catalog')}>Создать аккаунт <Icon name="arrow" /></Button>
+                <button className="login-link" onClick={() => openAuth(page === 'shop' ? 'shop' : page === 'product' ? 'product' : 'catalog')}>{t("Войти")}</button>
+                <Button onClick={() => openAuth(page === 'shop' ? 'shop' : page === 'product' ? 'product' : 'catalog')}>{t("Создать аккаунт")} <Icon name="arrow" /></Button>
               </>
             )}
           </div>
@@ -394,8 +414,8 @@ export default function App() {
               </button>
             ))}
           </nav>
-          {session ? <button className="header-balance" onClick={() => navigate('wallet')}>Баланс: {balance === null ? '…' : formatPrice(balance)}</button>
-            : <div className="nav-caption"><span className="online-dot" /> Открыто для покупок</div>}
+          {session ? <button className="header-balance" onClick={() => navigate('wallet')}>{t("Баланс")}: {balance === null ? '…' : formatPrice(balance)}</button>
+            : <div className="nav-caption"><span className="online-dot" /> {t("Открыто для покупок")}</div>}
         </div>
       </header>
 
@@ -420,6 +440,8 @@ export default function App() {
             busyProduct={busyProduct}
           />
         ) : null}
+
+        {page === 'product' && productId ? <ProductPage productId={productId} session={session} onAdd={addToCart} busyProduct={busyProduct} showToast={showToast} /> : null}
 
         {page === 'shop' && shopId ? <ShopPage key={shopId} sellerId={shopId} session={session}
           onOpen={openProduct} onAdd={addToCart} busyProduct={busyProduct} showToast={showToast}
@@ -458,11 +480,11 @@ export default function App() {
           session ? <ProfilePage token={session.access_token} role={role} showToast={showToast} /> : null
         ) : null}
 
-        {page !== 'catalog' && page !== 'shop' ? (
+        {page !== 'catalog' && page !== 'shop' && page !== 'product' ? (
           !session ? (
             <div className="empty-state">
-              <h3>Необходимо войти в аккаунт</h3>
-              <Button onClick={() => openAuth(page)}>Войти</Button>
+              <h3>{t("Необходимо войти в аккаунт")}</h3>
+              <Button onClick={() => openAuth(page)}>{t('Войти')}</Button>
             </div>
           ) : null
         ) : null}
@@ -471,22 +493,16 @@ export default function App() {
       <footer className="site-footer">
         <div className="footer-brand">
           <span className="brand-mark">m</span>
-          <div><strong>mint market</strong><small>Хорошие вещи находят своих людей.</small></div>
+          <div><strong>mint market</strong><small>{t("Хорошие вещи находят своих людей.")}</small></div>
         </div>
         <span>© 2026 Mint Market</span>
-        <span>Сделано с заботой о покупках</span>
+        <span>{t("Сделано с заботой о покупках")}</span>
       </footer>
 
       {authOpen ? (
         <AuthModal onClose={() => setAuthOpen(false)} onSuccess={completeAuth} />
       ) : null}
 
-      <ProductModal
-        product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
-        onAdd={addToCart}
-        busy={busyProduct === (selectedProduct ? selectedProduct.product_id : null)}
-      />
 
       {toast ? (
         <div className="toast"><span><Icon name="check" /></span>{toast}</div>

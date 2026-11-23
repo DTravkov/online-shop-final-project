@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { getProductGallery, getProductVisual } from '../helpers.js'
 
@@ -15,7 +16,7 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
   useEffect(() => {
     setCurrentIndex(0)
     setImageError(false)
-  }, [product?.product_id])
+  }, [product?.product_id, images.length])
 
   // Перейти к предыдущей фотографии.
   function showPrevious(event) {
@@ -65,7 +66,7 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
         type="button"
         className="carousel-image-button"
         onClick={onImageClick}
-        aria-label={'Открыть товар: ' + product.product_name}
+        aria-label={t('Открыть товар: ') + product.product_name}
       >
         {showPhoto ? (
           <img
@@ -76,11 +77,11 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
             onError={() => setImageError(true)}
           />
         ) : (
-          <span className="carousel-fallback-symbol">{visual.icon}</span>
+          <img className="carousel-fallback-image" src={'/images/fallbacks/' + visual.className.replace('visual-', '') + '.svg'} alt={product.product_name} />
         )}
       </button>
 
-      {gallery.isDemo ? <span className="carousel-demo-label">Демо-фото</span> : null}
+      {gallery.isDemo ? <span className="carousel-demo-label">{t('Демо-фото')}</span> : null}
 
       <span className="carousel-counter">
         {currentIndex + 1} / {images.length}
@@ -92,7 +93,7 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
             type="button"
             className="carousel-arrow carousel-arrow-left"
             onClick={showPrevious}
-            aria-label="Предыдущая фотография"
+            aria-label={t("Предыдущая фотография")}
           >
             ‹
           </button>
@@ -100,12 +101,12 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
             type="button"
             className="carousel-arrow carousel-arrow-right"
             onClick={showNext}
-            aria-label="Следующая фотография"
+            aria-label={t("Следующая фотография")}
           >
             ›
           </button>
 
-          <div className="carousel-dots" aria-label="Выбор фотографии">
+          <div className="carousel-dots" aria-label={t('Выбор фотографии')}>
             {images.map((image, index) => (
               <button
                 type="button"
@@ -115,7 +116,7 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
                   event.stopPropagation()
                   selectImage(index)
                 }}
-                aria-label={'Фотография ' + (index + 1)}
+                aria-label={t('Фотография ') + (index + 1)}
                 aria-current={index === currentIndex ? 'true' : undefined}
               />
             ))}
@@ -129,9 +130,9 @@ export default function ProductImageCarousel({ product, size = 'card', onImageCl
                   key={image + '-thumb-' + index}
                   className={index === currentIndex ? 'active' : ''}
                   onClick={() => selectImage(index)}
-                  aria-label={'Показать фотографию ' + (index + 1)}
+                  aria-label={t('Показать фотографию ') + (index + 1)}
                 >
-                  <img src={image} alt="" loading="lazy" />
+                  <img src={image} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = '/images/fallbacks/' + visual.className.replace('visual-', '') + '.svg' }} />
                 </button>
               ))}
             </div>

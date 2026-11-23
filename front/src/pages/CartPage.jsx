@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { apiGet, apiPost, apiPut, apiDelete, formatPrice, getErrorMessage } from '../api.js'
 import { getProductVisual } from '../helpers.js'
@@ -75,7 +76,7 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
       const updatedCart = await apiDelete('/customer/cart/items/' + productId, token)
       setCart(updatedCart)
       onCartChange(updatedCart.total_quantity)
-      showToast('Товар удалён из корзины')
+      showToast(t('Товар удалён из корзины'))
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     }
@@ -111,7 +112,7 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
   }
 
   if (loading) {
-    return <PageLoading label="Загружаем вашу корзину…" />
+    return <PageLoading label={t('Загружаем вашу корзину…')} />
   }
 
   let items = []
@@ -138,23 +139,23 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
 
   return (
     <section className="workspace-page">
-      <PageTitle eyebrow="ВАШИ ПОКУПКИ" title="Корзина" subtitle="Проверьте товары и подготовьте заказ." />
+      <PageTitle eyebrow={t("ВАШИ ПОКУПКИ")} title={t('Корзина')} subtitle={t('Проверьте товары и подготовьте заказ.')} />
 
       {error ? <div className="inline-error">{error}</div> : null}
 
       {items.length === 0 ? (
         <div className="empty-state empty-large">
           <div className="empty-icon"><Icon name="bag" /></div>
-          <h3>Корзина пока пуста</h3>
-          <p>Самое время найти что-нибудь особенное.</p>
-          <Button onClick={goToCatalog}>Перейти в каталог <Icon name="arrow" /></Button>
+          <h3>{t('Корзина пока пуста')}</h3>
+          <p>{t('Самое время найти что-нибудь особенное.')}</p>
+          <Button onClick={goToCatalog}>{t('Перейти в каталог')} <Icon name="arrow" /></Button>
         </div>
       ) : (
         <div className="cart-layout">
           <div className="cart-items panel-card">
             <div className="panel-heading">
-              <h3>Ваши товары</h3>
-              <span>{cart.total_quantity} шт.</span>
+              <h3>{t('Ваши товары')}</h3>
+              <span>{cart.total_quantity} {t("шт.")}</span>
             </div>
 
             {items.map((item) => {
@@ -183,8 +184,8 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
                   <div className="cart-item-main">
                     <strong>{item.product_name}</strong>
                     <small>{item.store_name} · {formatPrice(item.unit_price)}</small>
-                    {!item.available ? <em>Недостаточно товара на складе</em> : null}
-                    <button className="text-action remove-action" onClick={() => removeItem(item.product_id)} disabled={busy}>Удалить</button>
+                    {!item.available ? <em>{t('Недостаточно товара на складе')}</em> : null}
+                    <button className="text-action remove-action" onClick={() => removeItem(item.product_id)} disabled={busy}>{t('Удалить')}</button>
                   </div>
 
                   <div className="quantity-control">
@@ -204,38 +205,38 @@ export default function CartPage({ token, onCheckoutComplete, onCartChange, show
           </div>
 
           <aside className="checkout-card panel-card">
-            <p className="eyebrow">ИТОГО</p>
+            <p className="eyebrow">{t('ИТОГО')}</p>
             <div className="checkout-total">{formatPrice(cart.total_amount)}</div>
             <div className="checkout-line">
-              <span>Товары ({cart.total_quantity})</span>
+              <span>{t("Товары")} ({cart.total_quantity})</span>
               <strong>{formatPrice(cart.total_amount)}</strong>
             </div>
-            <div className="checkout-line"><span>Доставка</span><strong>Уточняется</strong></div>
+            <div className="checkout-line"><span>{t('Доставка')}</span><strong>{t('Уточняется')}</strong></div>
             <div className="checkout-divider" />
 
             <label className="field">
-              <span>Адрес доставки</span>
-              <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={3} placeholder="Укажите адрес доставки" />
+              <span>{t('Адрес доставки')}</span>
+              <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={3} placeholder={t('Укажите адрес доставки')} />
             </label>
 
             <label className="check-row">
               <input type="checkbox" checked={payNow} onChange={(event) => setPayNow(event.target.checked)} />
-              <span>Оплатить с баланса сейчас</span>
+              <span>{t('Оплатить с баланса сейчас')}</span>
             </label>
 
             {payNow && balance !== null && Number(balance) < Number(cart.total_amount) ?
-              <p className="checkout-hint">Для оплаты не хватает средств. Пополните баланс или оформите заказ с оплатой позже.</p> : null}
+              <p className="checkout-hint">{t('Для оплаты не хватает средств. Пополните баланс или оформите заказ с оплатой позже.')}</p> : null}
 
             <Button className="full-width" onClick={checkout} disabled={checkoutDisabled}>
-              {busy ? 'Оформляем…' : 'Оформить заказ'} <Icon name="arrow" />
+              {busy ? t('Оформляем…') : t('Оформить заказ')} <Icon name="arrow" />
             </Button>
 
             {!cart.can_checkout ? (
-              <p className="checkout-hint">Некоторые товары недоступны в указанном количестве. Измените корзину, чтобы продолжить.</p>
+              <p className="checkout-hint">{t('Некоторые товары недоступны в указанном количестве. Измените корзину, чтобы продолжить.')}</p>
             ) : null}
 
-            <p className="checkout-note">На балансе: {balance === null ? '…' : formatPrice(balance)}. Если оплатить позже, заказ появится в разделе «Мои заказы».</p>
-            <button className="text-action" onClick={goToWallet}>Пополнить баланс →</button>
+            <p className="checkout-note">{t("На балансе: ")} {balance === null ? '…' : formatPrice(balance)}. {t("Если оплатить позже, заказ появится в разделе «Мои заказы».")}</p>
+            <button className="text-action" onClick={goToWallet}>{t('Пополнить баланс →')}</button>
           </aside>
         </div>
       )}

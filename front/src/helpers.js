@@ -1,3 +1,4 @@
+import { t } from './i18n.js'
 // Выбрать значок и цвет карточки по названию товара.
 export function getProductVisual(productName) {
   let name = ''
@@ -67,7 +68,7 @@ export function getStatusName(status) {
   }
 
   if (names[status]) {
-    return names[status]
+    return t(names[status])
   }
 
   return status
@@ -120,14 +121,6 @@ const DEMO_PRODUCT_IMAGES = {
 // Если Backend уже прислал фото, используем их.
 // Если фотографий пока нет, используем временные демо-фото.
 export function getProductGallery(product) {
-  // Сначала проверяем, есть ли отдельные фото для этого товара.
-  if (product?.product_id && PRODUCT_IMAGE_OVERRIDES[product.product_id]) {
-    return {
-      images: PRODUCT_IMAGE_OVERRIDES[product.product_id],
-      isDemo: true,
-    }
-  }
-
   let serverImages = []
 
   if (Array.isArray(product?.images)) {
@@ -151,6 +144,14 @@ export function getProductGallery(product) {
     return {
       images: serverImages,
       isDemo: false,
+    }
+  }
+
+  // Если сервер пока не прислал фото, проверяем ручную галерею товара.
+  if (product?.product_id && PRODUCT_IMAGE_OVERRIDES[product.product_id]) {
+    return {
+      images: PRODUCT_IMAGE_OVERRIDES[product.product_id],
+      isDemo: true,
     }
   }
 
@@ -182,4 +183,20 @@ export function getProductGallery(product) {
 
   // Для неизвестной категории используем нейтральную временную галерею.
   return { images: DEMO_PRODUCT_IMAGES.audio, isDemo: true }
+}
+
+
+// Временное описание товара до появления поля description в Backend.
+export function getProductDescription(product) {
+  if (product?.description && String(product.description).trim()) {
+    return String(product.description)
+  }
+
+  const name = String(product?.product_name || '').toLowerCase()
+  if (name.includes('наушник') || name.includes('headphone')) return 'Удобные наушники для повседневного использования. Подходят для музыки, общения и работы. Это демонстрационное описание, которое позже можно заменить текстом продавца.'
+  if (name.includes('телефон') || name.includes('смартфон') || name.includes('phone')) return 'Современное устройство для общения, работы и развлечений. Это демонстрационное описание: реальные характеристики можно будет добавить после расширения Backend.'
+  if (name.includes('ноутбук') || name.includes('laptop')) return 'Универсальное устройство для учёбы, работы и повседневных задач. Это временное описание, пока продавец не сможет добавлять собственный текст.'
+  if (name.includes('круж') || name.includes('чаш') || name.includes('mug')) return 'Практичный предмет для дома и повседневного использования. Это демонстрационное описание товара.'
+  if (name.includes('сум') || name.includes('рюкзак') || name.includes('bag')) return 'Практичный аксессуар для хранения и переноски личных вещей. Это демонстрационное описание товара.'
+  return 'Информация об этом товаре появится здесь. Сейчас Backend ещё не передаёт описание товара, поэтому показан временный текст.'
 }

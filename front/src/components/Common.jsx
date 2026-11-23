@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { getStatusName } from '../helpers.js'
 
 // Простые текстовые значки для кнопок и навигации.
@@ -125,7 +126,7 @@ export function PageTitle(props) {
 
 // Экран загрузки.
 export function PageLoading({ label }) {
-  let loadingText = 'Загружаем…'
+  let loadingText = t('Загружаем…')
   if (label) {
     loadingText = label
   }
@@ -149,7 +150,7 @@ export function ModalFrame({ children, onClose }) {
   return (
     <div className="modal-backdrop" onMouseDown={closeOnBackground}>
       <section className="modal-panel form-modal">
-        <button className="modal-close" onClick={onClose} aria-label="Закрыть">
+        <button className="modal-close" onClick={onClose} aria-label={t('Закрыть')}>
           <Icon name="close" />
         </button>
         {children}

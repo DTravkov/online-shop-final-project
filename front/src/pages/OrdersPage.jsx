@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { apiGet, apiPost, apiPatch, formatDate, formatPrice, getErrorMessage } from '../api.js'
 import { getProductVisual } from '../helpers.js'
@@ -45,9 +46,9 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
       onBalanceChanged()
 
       if (action === 'pay') {
-        showToast('Заказ оплачен')
+        showToast(t('Заказ оплачен'))
       } else {
-        showToast('Заказ отменён')
+        showToast(t('Заказ отменён'))
       }
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -67,7 +68,7 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
       }, token)
 
       await loadOrders()
-      showToast('Статус заказа обновлён')
+      showToast(t('Статус заказа обновлён'))
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     }
@@ -76,17 +77,17 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
   }
 
   if (loading) {
-    return <PageLoading label="Загружаем заказы…" />
+    return <PageLoading label={t('Загружаем заказы…')} />
   }
 
-  let title = 'Мои заказы'
-  let subtitle = 'Все ваши покупки собраны в одном месте.'
-  let eyebrow = 'ВАША ИСТОРИЯ'
+  let title = t('Мои заказы')
+  let subtitle = t('Все ваши покупки собраны в одном месте.')
+  let eyebrow = t('ВАША ИСТОРИЯ')
 
   if (role === 'seller') {
-    title = 'Заказы покупателей'
-    subtitle = 'Следите за заказами и обновляйте их статус.'
-    eyebrow = 'РАБОТА МАГАЗИНА'
+    title = t('Заказы покупателей')
+    subtitle = t('Следите за заказами и обновляйте их статус.')
+    eyebrow = t('РАБОТА МАГАЗИНА')
   }
 
   return (
@@ -97,13 +98,13 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
       {orders.length === 0 ? (
         <div className="empty-state empty-large">
           <div className="empty-icon"><Icon name="box" /></div>
-          <h3>Заказов пока нет</h3>
-          <p>{role === 'seller' ? 'Когда покупатели оформят заказ, он появится здесь.' : 'Оформленные покупки появятся здесь.'}</p>
+          <h3>{t('Заказов пока нет')}</h3>
+          <p>{role === 'seller' ? t('Когда покупатели оформят заказ, он появится здесь.') : t('Оформленные покупки появятся здесь.')}</p>
         </div>
       ) : (
         <div className="orders-list">
           {orders.map((order) => {
-            let customerName = 'Покупатель'
+            let customerName = t('Покупатель')
             if (order.customer_name) {
               customerName = order.customer_name
             }
@@ -132,7 +133,7 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
             <article className="order-card panel-card" key={order.order_id}>
               <div className="order-top">
                 <div>
-                  <p className="eyebrow">ЗАКАЗ №{order.order_id}</p>
+                  <p className="eyebrow">{t("ЗАКАЗ №")}{order.order_id}</p>
                   <span className="order-date">{formatDate(order.order_date)}</span>
                 </div>
                 <div className="order-statuses">
@@ -143,7 +144,7 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
 
               {role === 'seller' ? (
                 <div className="order-customer">
-                  <span>Покупатель</span>
+                  <span>{t('Покупатель')}</span>
                   <strong>{customerName}</strong>
                 </div>
               ) : null}
@@ -155,12 +156,12 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
                       <a className="shop-link" href={`#/shops/${fulfillment.seller_id}`}>{fulfillment.store_name}</a>
                       <Status value={fulfillment.status} />
                       {fulfillment.status === 'delivered' && order.payment_status === 'paid' ?
-                        <a className="review-link" href={`#/shops/${fulfillment.seller_id}`}>Оставить отзыв →</a> : null}
+                        <a className="review-link" href={`#/shops/${fulfillment.seller_id}`}>{t('Оставить отзыв →')}</a> : null}
                     </div>
                   ))}
                 </div>
               ) : null}
-              {role === 'seller' ? <p className="fulfillment-note">Вы управляете доставкой только своих товаров.</p> : null}
+              {role === 'seller' ? <p className="fulfillment-note">{t('Вы управляете доставкой только своих товаров.')}</p> : null}
 
               <div className="order-product-list">
                 {order.items.map((item) => {
@@ -181,26 +182,26 @@ export default function OrdersPage({ token, role, showToast, onBalanceChanged })
 
               <div className="order-bottom">
                 <div>
-                  <span>{role === 'seller' ? 'Сумма товаров магазина' : 'Сумма заказа'}</span>
+                  <span>{role === 'seller' ? t('Сумма товаров магазина') : t('Сумма заказа')}</span>
                   <strong>{formatPrice(role === 'seller' ? order.seller_total : order.total_amount)}</strong>
                 </div>
 
                 {role === 'customer' ? (
                   <div className="order-actions">
                     {canPay ? (
-                      <Button variant="soft" onClick={() => customerAction(order.order_id, 'pay')} disabled={busyOrder === order.order_id}>Оплатить</Button>
+                      <Button variant="soft" onClick={() => customerAction(order.order_id, 'pay')} disabled={busyOrder === order.order_id}>{t('Оплатить')}</Button>
                     ) : null}
                     {canCancel ? (
-                      <Button variant="outline" onClick={() => customerAction(order.order_id, 'cancel')} disabled={busyOrder === order.order_id}>Отменить</Button>
+                      <Button variant="outline" onClick={() => customerAction(order.order_id, 'cancel')} disabled={busyOrder === order.order_id}>{t('Отменить')}</Button>
                     ) : null}
                   </div>
                 ) : (
                   <div className="order-actions">
                     {order.order_status === 'new' ? (
-                      <Button variant="soft" onClick={() => sellerAction(order.order_id, 'shipped')} disabled={busyOrder === order.order_id}>Отправить</Button>
+                      <Button variant="soft" onClick={() => sellerAction(order.order_id, 'shipped')} disabled={busyOrder === order.order_id}>{t('Отправить')}</Button>
                     ) : null}
                     {canMarkDelivered ? (
-                      <Button variant="outline" onClick={() => sellerAction(order.order_id, 'delivered')} disabled={busyOrder === order.order_id}>Доставлен</Button>
+                      <Button variant="outline" onClick={() => sellerAction(order.order_id, 'delivered')} disabled={busyOrder === order.order_id}>{t('Доставлен')}</Button>
                     ) : null}
                   </div>
                 )}

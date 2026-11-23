@@ -1,14 +1,18 @@
-// QA: 10 frontend-тестов (Vitest + React Testing Library + jsdom).
+// QA: 16 frontend-тестов (Vitest + React Testing Library + jsdom).
 // Настоящий backend не нужен: запросы fetch заменены "фейковым API" (mockApi).
 // Запуск (из папки front/):  npm test
 
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import App from '../App.jsx'
 import { apiDelete, apiGet, apiPost, formatDate, formatPrice, getErrorMessage } from '../api.js'
-import { getProductVisual, getStatusName } from '../helpers.js'
+import { getProductGallery, getProductVisual, getStatusName } from '../helpers.js'
+import ProductPage from '../pages/ProductPage.jsx'
+import ProductImageCarousel from '../components/ProductImageCarousel.jsx'
+import ShopPage from '../pages/ShopPage.jsx'
+import { getLanguage, setLanguage, t } from '../i18n.js'
 import CartPage from '../pages/CartPage.jsx'
 import OrdersPage from '../pages/OrdersPage.jsx'
 
@@ -441,5 +445,118 @@ describe('FT-10 orders page', () => {
     const all = calls(fetchMock)
     expect(all.some((c) => c.method === 'POST' && c.path === '/customer/orders/1/pay')).toBe(true)
     expect(all.filter((c) => c.method === 'GET' && c.path === '/customer/orders')).toHaveLength(2)
+  })
+})
+
+
+// FT-11  Product gallery: server images take priority, demo gallery is the fallback.
+describe('FT-11 product gallery', () => {
+  it('uses images from API first and category demo images when API has none', () => {
+    const serverGallery = getProductGallery({
+      product_id: 1, product_name: 'Наушники', images: ['/uploads/a.jpg', '/uploads/b.jpg'],
+    })
+    expect(serverGallery.isDemo).toBe(false)
+    expect(serverGallery.images).toEqual(['/uploads/a.jpg', '/uploads/b.jpg'])
+
+    const demoGallery = getProductGallery({ product_id: 2, product_name: 'Наушники' })
+    expect(demoGallery.isDemo).toBe(true)
+    expect(demoGallery.images).toHaveLength(3)
+  })
+})
+
+// FT-12  Product page: full detail page loads product, shop and shop reviews.
+describe('FT-12 product detail page', () => {
+  it('shows product price, description and seller reviews section', async () => {
+    mockApi({
+      'GET /catalog/products/1': {
+        product_id: 1, product_name: 'Беспроводные наушники', price: '15000.00',
+        stock_quantity: 4, in_stock: true, seller_id: 8, store_name: 'Mint Store', seller_rating: '4.8',
+      },
+      'GET /catalog/sellers/8': { seller_id: 8, store_name: 'Mint Store', rating: '4.8', review_count: 1 },
+      'GET /catalog/sellers/8/reviews': [{
+        review_id: 1, seller_id: 8, rating: 5, comment: 'Быстрая доставка',
+        customer_name: 'Айша', created_at: '2026-11-20T10:00:00Z',
+      }],
+    })
+
+    render(<ProductPage productId={1} session={null} onAdd={vi.fn()} busyProduct={null} showToast={vi.fn()} />)
+
+    expect(await screen.findByRole('heading', { name: 'Беспроводные наушники' })).toBeInTheDocument()
+    expect(screen.getByText((value) => value.replace(/\s/g, ' ').includes('15 000,00'))).toBeInTheDocument()
+    expect(screen.getByText('Отзывы покупателей о магазине')).toBeInTheDocument()
+    expect(screen.getByText('Быстрая доставка')).toBeInTheDocument()
+  })
+})
+
+// FT-13  Language selector translations.
+describe('FT-13 language dictionary', () => {
+  it('switches interface text between Russian, English and Kazakh', () => {
+    setLanguage('ru')
+    expect(t('Каталог')).toBe('Каталог')
+    setLanguage('en')
+    expect(t('Каталог')).toBe('Catalog')
+    setLanguage('kk')
+    expect(t('Каталог')).toBe('Каталог')
+    setLanguage('ru')
+    expect(getLanguage()).toBe('ru')
+  })
+})
+
+
+// FT-14  Carousel controls and offline fallback illustration.
+describe('FT-14 image carousel', () => {
+  it('switches images and displays a local illustration if the remote photo fails', async () => {
+    const user = userEvent.setup()
+    render(<ProductImageCarousel product={headphones} />)
+    const firstImage = screen.getByRole('img', { name: 'Беспроводные наушники' })
+    const firstSource = firstImage.getAttribute('src')
+    await user.click(screen.getByRole('button', { name: 'Следующая фотография' }))
+    const secondImage = screen.getByRole('img', { name: 'Беспроводные наушники' })
+    expect(secondImage.getAttribute('src')).not.toBe(firstSource)
+    fireEvent.error(secondImage)
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: 'Беспроводные наушники' }).getAttribute('src'))
+        .toContain('/images/fallbacks/')
+    })
+  })
+})
+
+// FT-15  Shop page must include active products even when stock is zero.
+describe('FT-15 shop catalog', () => {
+  it('requests all active listings and keeps sold-out products visible', async () => {
+    const fetchMock = mockApi({
+      'GET /catalog/sellers/8': { seller_id: 8, store_name: 'Mint Store', rating: '4.8', review_count: 0 },
+      'GET /catalog/products': [mug],
+      'GET /catalog/sellers/8/reviews': [],
+    })
+    render(<ShopPage sellerId={8} session={null} onOpen={vi.fn()} onAdd={vi.fn()}
+      busyProduct={null} showToast={vi.fn()} onReviewsChanged={vi.fn()} />)
+    expect(await screen.findByText('Кружка')).toBeInTheDocument()
+    expect(screen.getByText('Нет в наличии')).toBeInTheDocument()
+    const productRequest = calls(fetchMock).find((call) => call.path === '/catalog/products')
+    expect(productRequest.params.get('seller_id')).toBe('8')
+    expect(productRequest.params.get('in_stock')).toBe('false')
+  })
+})
+
+// FT-16  Navigation: selecting a catalog item opens its own URL page.
+describe('FT-16 product page navigation', () => {
+  it('opens #/products/:id instead of the old product modal', async () => {
+    const user = userEvent.setup()
+    window.location.hash = '#catalog'
+    mockApi({
+      'GET /catalog/products': [headphones],
+      'GET /catalog/products/1': {
+        product_id: 1, product_name: 'Беспроводные наушники', price: '15000.00',
+        stock_quantity: 5, in_stock: true, seller_id: 8, store_name: 'Mint Store', seller_rating: '4.8',
+      },
+      'GET /catalog/sellers/8': { seller_id: 8, store_name: 'Mint Store', rating: '4.8', review_count: 0 },
+      'GET /catalog/sellers/8/reviews': [],
+    })
+    render(<App />)
+    await screen.findByText('Беспроводные наушники')
+    await user.click(screen.getByRole('button', { name: 'Беспроводные наушники' }))
+    expect(await screen.findByText('Описание товара')).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/products/1')
   })
 })

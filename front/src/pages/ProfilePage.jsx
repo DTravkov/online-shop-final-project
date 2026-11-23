@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { apiGet, apiPatch, apiPut, getErrorMessage } from '../api.js'
 import { Button, Field, Icon, PageLoading, PageTitle } from '../components/Common.jsx'
@@ -98,7 +99,7 @@ export default function ProfilePage({ token, role, showToast }) {
       }
 
       await loadProfile()
-      showToast('Изменения сохранены')
+      showToast(t('Изменения сохранены'))
     } catch (requestError) {
       setError(getErrorMessage(requestError))
     }
@@ -107,15 +108,15 @@ export default function ProfilePage({ token, role, showToast }) {
   }
 
   if (loading) {
-    return <PageLoading label="Загружаем профиль…" />
+    return <PageLoading label={t('Загружаем профиль…')} />
   }
 
   let displayName = fullName
-  let roleName = 'Аккаунт покупателя'
+  let roleName = t('Аккаунт покупателя')
 
   if (isSeller) {
     displayName = storeName
-    roleName = 'Аккаунт продавца'
+    roleName = t('Аккаунт продавца')
   }
 
   let rating = 0
@@ -132,7 +133,7 @@ export default function ProfilePage({ token, role, showToast }) {
 
   return (
     <section className="workspace-page profile-page">
-      <PageTitle eyebrow="ЛИЧНЫЙ КАБИНЕТ" title="Мой профиль" subtitle="Контактные данные и настройки аккаунта." />
+      <PageTitle eyebrow={t("ЛИЧНЫЙ КАБИНЕТ")} title={t('Мой профиль')} subtitle={t('Контактные данные и настройки аккаунта.')} />
       {error ? <div className="inline-error">{error}</div> : null}
 
       {profile ? (
@@ -143,38 +144,38 @@ export default function ProfilePage({ token, role, showToast }) {
             <span className="role-label">{roleName}</span>
 
             {isSeller ? (
-              <div className="profile-rating">★ {rating} <small>рейтинг магазина</small></div>
+              <div className="profile-rating">★ {rating} <small>{t('рейтинг магазина')}</small></div>
             ) : null}
 
-            <div className="profile-note">Данные профиля используются для связи и оформления заказов.</div>
+            <div className="profile-note">{t('Данные профиля используются для связи и оформления заказов.')}</div>
           </div>
 
           <form className="profile-form panel-card" onSubmit={submit}>
             <div className="panel-heading">
-              <h3>Основная информация</h3>
-              <span>Изменения сохраняются в аккаунте</span>
+              <h3>{t('Основная информация')}</h3>
+              <span>{t('Изменения сохраняются в аккаунте')}</span>
             </div>
 
             {isSeller ? (
-              <Field label="Название магазина" value={storeName} onChange={(event) => setStoreName(event.target.value)} required maxLength={100} />
+              <Field label={t('Название магазина')} value={storeName} onChange={(event) => setStoreName(event.target.value)} required maxLength={100} />
             ) : (
-              <Field label="Полное имя" value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength={100} />
+              <Field label={t('Полное имя')} value={fullName} onChange={(event) => setFullName(event.target.value)} required maxLength={100} />
             )}
 
-            <Field label="Электронная почта" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={100} />
-            <Field label="Телефон" value={phone} onChange={(event) => setPhone(event.target.value)} required maxLength={20} />
+            <Field label={t('Электронная почта')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={100} />
+            <Field label={t('Телефон')} value={phone} onChange={(event) => setPhone(event.target.value)} required maxLength={20} />
 
             {!isSeller ? (
               <label className="field">
-                <span>Адрес доставки по умолчанию</span>
+                <span>{t('Адрес доставки по умолчанию')}</span>
                 <textarea rows={3} value={address} onChange={(event) => setAddress(event.target.value)} required maxLength={255} />
               </label>
             ) : null}
 
             <div className="profile-form-footer">
-              <p>Новый email также станет логином для входа.</p>
+              <p>{t('Новый email также станет логином для входа.')}</p>
               <Button type="submit" disabled={saving}>
-                {saving ? 'Сохраняем…' : 'Сохранить изменения'} <Icon name="check" />
+                {saving ? t('Сохраняем…') : t('Сохранить изменения')} <Icon name="check" />
               </Button>
             </div>
           </form>

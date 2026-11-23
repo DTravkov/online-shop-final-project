@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { apiDelete, apiGet, apiPost, getErrorMessage } from '../api.js'
 import { Button } from './Common.jsx'
@@ -61,27 +62,27 @@ export default function TelegramSettings({ token }) {
   return (
     <section className="profile-form profile-telegram panel-card">
       <div className="panel-heading">
-        <h3>Уведомления в Telegram</h3>
-        {status && <span role="status">{status.linked ? 'Подключено' : 'Не подключено'}</span>}
+        <h3>{t('Уведомления в Telegram')}</h3>
+        {status && <span role="status">{status.linked ? t('Подключено') : t('Не подключено')}</span>}
       </div>
       {error && <div className="inline-error" role="alert">{error}</div>}
-      {!status && !error && <p role="status">Проверяем подключение…</p>}
-      {status?.linked && <Button variant="outline" onClick={unlink} disabled={busy}>Отключить Telegram</Button>}
-      {status && !status.enabled && <p>Уведомления в Telegram сейчас недоступны.</p>}
-      {status?.enabled && !status.linked && !url && <Button onClick={start} disabled={busy}>Подключить Telegram</Button>}
+      {!status && !error && <p role="status">{t('Проверяем подключение…')}</p>}
+      {status?.linked && <Button variant="outline" onClick={unlink} disabled={busy}>{t('Отключить Telegram')}</Button>}
+      {status && !status.enabled && <p>{t('Уведомления в Telegram сейчас недоступны.')}</p>}
+      {status?.enabled && !status.linked && !url && <Button onClick={start} disabled={busy}>{t('Подключить Telegram')}</Button>}
       {url && (
         <form onSubmit={confirm}>
-          <p>Откройте бота, нажмите Start и введите полученный код. Ссылка действует 5 минут.</p>
-          <a className="button button-primary" href={url} target="_blank" rel="noopener noreferrer">Открыть Telegram</a>
+          <p>{t('Откройте бота, нажмите Start и введите полученный код. Ссылка действует 5 минут.')}</p>
+          <a className="button button-primary" href={url} target="_blank" rel="noopener noreferrer">{t('Открыть Telegram')}</a>
           <label className="field">
-            <span>Код из Telegram</span>
+            <span>{t('Код из Telegram')}</span>
             <input value={code} onChange={(event) => setCode(event.target.value)} required
               pattern="[a-fA-F0-9]{12}" maxLength={12} autoComplete="off" spellCheck={false} />
           </label>
           <div className="profile-telegram-actions">
-            <Button type="submit" disabled={busy}>Подтвердить</Button>
-            <Button variant="soft" onClick={start} disabled={busy}>Новая ссылка</Button>
-            <Button variant="outline" onClick={unlink} disabled={busy}>Отменить</Button>
+            <Button type="submit" disabled={busy}>{t('Подтвердить')}</Button>
+            <Button variant="soft" onClick={start} disabled={busy}>{t('Новая ссылка')}</Button>
+            <Button variant="outline" onClick={unlink} disabled={busy}>{t('Отменить')}</Button>
           </div>
         </form>
       )}

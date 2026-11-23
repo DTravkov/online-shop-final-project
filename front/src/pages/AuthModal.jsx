@@ -1,3 +1,4 @@
+import { t } from '../i18n.js'
 import { useState } from 'react'
 import { apiPost, getErrorMessage } from '../api.js'
 import { Button, Field, Icon } from '../components/Common.jsx'
@@ -72,32 +73,32 @@ export default function AuthModal({ onClose, onSuccess }) {
   return (
     <div className="modal-backdrop" onMouseDown={closeOnBackground}>
       <section className="auth-modal modal-panel">
-        <button className="modal-close" onClick={onClose} aria-label="Закрыть">
+        <button className="modal-close" onClick={onClose} aria-label={t('Закрыть')}>
           <Icon name="close" />
         </button>
 
         <div className="modal-brand"><span className="brand-mark">m</span> mint market</div>
-        <p className="eyebrow">ВАШ МАРКЕТПЛЕЙС</p>
+        <p className="eyebrow">{t('ВАШ МАРКЕТПЛЕЙС')}</p>
 
-        <h2>{mode === 'login' ? 'С возвращением' : 'Создайте аккаунт'}</h2>
+        <h2>{mode === 'login' ? t('С возвращением') : t('Создайте аккаунт')}</h2>
         <p className="modal-subtitle">
           {mode === 'login'
-            ? 'Войдите, чтобы продолжить покупки и управлять магазином.'
-            : 'Покупайте любимые вещи или откройте собственный магазин.'}
+            ? t('Войдите, чтобы продолжить покупки и управлять магазином.')
+            : t('Покупайте любимые вещи или откройте собственный магазин.')}
         </p>
 
         <div className="auth-mode-switch">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>Войти</button>
-          <button className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>Регистрация</button>
+          <button className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>{t('Войти')}</button>
+          <button className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>{t('Регистрация')}</button>
         </div>
 
         {mode === 'register' ? (
           <div className="role-switch">
             <button className={role === 'customer' ? 'active' : ''} onClick={() => setRole('customer')}>
-              <Icon name="bag" /> Покупатель
+              <Icon name="bag" /> {t('Покупатель')}
             </button>
             <button className={role === 'seller' ? 'active' : ''} onClick={() => setRole('seller')}>
-              <Icon name="box" /> Продавец
+              <Icon name="box" /> {t('Продавец')}
             </button>
           </div>
         ) : null}
@@ -105,35 +106,35 @@ export default function AuthModal({ onClose, onSuccess }) {
         <form onSubmit={submit} className="form-stack">
           {mode === 'register' ? (
             role === 'customer' ? (
-              <Field label="Ваше имя" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Например, Айша" required maxLength={100} />
+              <Field label={t('Ваше имя')} value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={t('Например, Айша')} required maxLength={100} />
             ) : (
-              <Field label="Название магазина" value={storeName} onChange={(event) => setStoreName(event.target.value)} placeholder="Например, Mint Store" required maxLength={100} />
+              <Field label={t('Название магазина')} value={storeName} onChange={(event) => setStoreName(event.target.value)} placeholder={t('Например, Mint Store')} required maxLength={100} />
             )
           ) : null}
 
-          <Field label="Электронная почта" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required maxLength={100} />
+          <Field label={t('Электронная почта')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" required maxLength={100} />
 
           {mode === 'register' ? (
-            <Field label="Телефон" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+7 700 000 00 00" required maxLength={20} />
+            <Field label={t('Телефон')} type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+7 700 000 00 00" required maxLength={20} />
           ) : null}
 
           {mode === 'register' ? (
             role === 'customer' ? (
-              <Field label="Адрес доставки" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Город, улица, дом, квартира" required maxLength={255} />
+              <Field label={t('Адрес доставки')} value={address} onChange={(event) => setAddress(event.target.value)} placeholder={t('Город, улица, дом, квартира')} required maxLength={255} />
             ) : null
           ) : null}
 
-          <Field label="Пароль" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Не менее 8 символов" required minLength={8} maxLength={128} />
+          <Field label={t('Пароль')} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t('Не менее 8 символов')} required minLength={8} maxLength={128} />
 
           {error ? <div className="form-error">{error}</div> : null}
 
           <Button type="submit" className="full-width" disabled={loading}>
-            {loading ? 'Подождите…' : mode === 'login' ? 'Войти в аккаунт' : 'Создать аккаунт'}
+            {loading ? t('Подождите…') : mode === 'login' ? t('Войти в аккаунт') : t('Создать аккаунт')}
             <Icon name="arrow" />
           </Button>
         </form>
 
-        <p className="auth-footnote">Продолжая, вы соглашаетесь с правилами использования сервиса.</p>
+        <p className="auth-footnote">{t('Продолжая, вы соглашаетесь с правилами использования сервиса.')}</p>
       </section>
     </div>
   )

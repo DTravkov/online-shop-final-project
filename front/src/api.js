@@ -1,3 +1,4 @@
+import { getLanguage } from './i18n.js'
 // Адрес API. Vite передаст запрос в FastAPI через proxy.
 const API_URL = '/api'
 
@@ -92,7 +93,8 @@ export function apiDelete(path, token) {
 export function formatPrice(price) {
   const number = Number(price)
 
-  return new Intl.NumberFormat('ru-RU', {
+  const locales = { ru: 'ru-RU', en: 'en-US', kk: 'kk-KZ' }
+  return new Intl.NumberFormat(locales[getLanguage()] || 'ru-RU', {
     style: 'currency',
     currency: 'KZT',
     minimumFractionDigits: 2,
@@ -106,7 +108,8 @@ export function formatDate(value) {
     return '—'
   }
 
-  return new Intl.DateTimeFormat('ru-RU', {
+  const locales = { ru: 'ru-RU', en: 'en-US', kk: 'kk-KZ' }
+  return new Intl.DateTimeFormat(locales[getLanguage()] || 'ru-RU', {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
